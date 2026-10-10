@@ -26,9 +26,10 @@ check: gluewc
 	$(MAKE) -C tests
 gluewc: gluewc.o util.o dwl-ipc-unstable-v2-protocol.o
 	$(CC) gluewc.o util.o dwl-ipc-unstable-v2-protocol.o $(GLUEWCCFLAGS) $(LDFLAGS) $(LDLIBS) -o $@
-gluewc-msg: gluewc-msg.o dwl-ipc-unstable-v2-protocol.o
-	$(CC) gluewc-msg.o dwl-ipc-unstable-v2-protocol.o $(MSGCFLAGS) $(LDFLAGS) $(MSGLIBS) -o $@
-gluewc-msg.o: gluewc-msg.c dwl-ipc-unstable-v2-client-protocol.h
+gluewc-msg: gluewc-msg.o dwl-ipc-unstable-v2-protocol.o wlr-output-power-management-unstable-v1-protocol.o
+	$(CC) gluewc-msg.o dwl-ipc-unstable-v2-protocol.o wlr-output-power-management-unstable-v1-protocol.o $(MSGCFLAGS) $(LDFLAGS) $(MSGLIBS) -o $@
+gluewc-msg.o: gluewc-msg.c dwl-ipc-unstable-v2-client-protocol.h \
+	wlr-output-power-management-unstable-v1-client-protocol.h
 	$(CC) $(CPPFLAGS) $(MSGCFLAGS) -o $@ -c gluewc-msg.c
 gluewc.o: gluewc.c client.h config.h config.mk cursor-shape-v1-protocol.h \
 	dwl-ipc-unstable-v2-protocol.h \
@@ -36,6 +37,8 @@ gluewc.o: gluewc.c client.h config.h config.mk cursor-shape-v1-protocol.h \
 	wlr-output-power-management-unstable-v1-protocol.h xdg-shell-protocol.h
 util.o: util.c util.h
 dwl-ipc-unstable-v2-protocol.o: dwl-ipc-unstable-v2-protocol.c dwl-ipc-unstable-v2-protocol.h
+wlr-output-power-management-unstable-v1-protocol.o: wlr-output-power-management-unstable-v1-protocol.c
+	$(CC) $(CPPFLAGS) $(MSGCFLAGS) -o $@ -c wlr-output-power-management-unstable-v1-protocol.c
 
 # wayland-scanner is a tool which generates C headers and rigging for Wayland
 # protocols, which are specified in XML. wlroots requires you to rig these up
@@ -54,6 +57,12 @@ wlr-layer-shell-unstable-v1-protocol.h:
 		protocols/wlr-layer-shell-unstable-v1.xml $@
 wlr-output-power-management-unstable-v1-protocol.h:
 	$(WAYLAND_SCANNER) server-header \
+		protocols/wlr-output-power-management-unstable-v1.xml $@
+wlr-output-power-management-unstable-v1-protocol.c:
+	$(WAYLAND_SCANNER) private-code \
+		protocols/wlr-output-power-management-unstable-v1.xml $@
+wlr-output-power-management-unstable-v1-client-protocol.h:
+	$(WAYLAND_SCANNER) client-header \
 		protocols/wlr-output-power-management-unstable-v1.xml $@
 xdg-shell-protocol.h:
 	$(WAYLAND_SCANNER) server-header \

@@ -6,6 +6,7 @@
  *   gluewc-msg [-o OUTPUT] workspace N     view workspace N (1-9)
  *   gluewc-msg [-o OUTPUT] move N          send the focused window to N
  *   gluewc-msg [-o OUTPUT] layout NAME     bsp, scroll or drift
+ *   gluewc-msg [-o OUTPUT] power on|off    switch the output on or off
  *   gluewc-msg status                      one line per output, then exit
  *   gluewc-msg outputs                     the monitor state file, verbatim
  *   gluewc-msg quit                        end the session
@@ -17,6 +18,7 @@
 #include <string.h>
 #include <wayland-client.h>
 #include "dwl-ipc-unstable-v2-client-protocol.h"
+#include "wlr-output-power-management-unstable-v1-client-protocol.h"
 
 #define MAXOUT 16
 
@@ -30,6 +32,7 @@ struct output {
 };
 
 static struct zdwl_ipc_manager_v2 *ipc_mgr;
+static struct zwlr_output_power_manager_v1 *power_mgr;
 static struct output outputs[MAXOUT];
 static int noutputs;
 static char layouts[8][16];
@@ -115,6 +118,9 @@ static void reg_global(void *d, struct wl_registry *reg, uint32_t name,
 		ipc_mgr = wl_registry_bind(reg, name, &zdwl_ipc_manager_v2_interface,
 				ver < 2 ? ver : 2);
 		zdwl_ipc_manager_v2_add_listener(ipc_mgr, &mgr_listener, NULL);
+	} else if (!strcmp(iface, zwlr_output_power_manager_v1_interface.name)) {
+		power_mgr = wl_registry_bind(reg, name,
+				&zwlr_output_power_manager_v1_interface, 1);
 	}
 }
 static void reg_remove(void *d, struct wl_registry *r, uint32_t n) {}
@@ -126,6 +132,7 @@ static void
 usage(void)
 {
 	fputs("usage: gluewc-msg [-o OUTPUT] workspace N | move N | layout NAME\n"
+			"       gluewc-msg [-o OUTPUT] power on|off\n"
 			"       gluewc-msg status | outputs | quit\n", stderr);
 	exit(2);
 }
@@ -243,6 +250,17 @@ main(int argc, char *argv[])
 			return 1;
 		}
 		zdwl_ipc_output_v2_set_layout(target->ipc, l);
+	} else if (!strcmp(cmd, "power")) {
+		int on = !strcmp(argv[2], "on");
+		if (!on && strcmp(argv[2], "off"))
+			usage();
+		if (!power_mgr) {
+			fputs("gluewc-msg: the compositor does not do output power\n", stderr);
+			return 1;
+		}
+		zwlr_output_power_v1_set_mode(
+				zwlr_output_power_manager_v1_get_output_power(power_mgr, target->wl),
+				on ? ZWLR_OUTPUT_POWER_V1_MODE_ON : ZWLR_OUTPUT_POWER_V1_MODE_OFF);
 	} else {
 		usage();
 	}

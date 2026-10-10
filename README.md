@@ -264,6 +264,7 @@ gluewc-msg outputs                       # geometry, modes, mirror of each monit
 gluewc-msg -o eDP-1 workspace 3          # view workspace 3 there
 gluewc-msg move 2                        # send the focused window to 2
 gluewc-msg layout scroll
+gluewc-msg -o eDP-1 power off            # switch the panel off (on brings it back)
 ```
 
 ### glueqs

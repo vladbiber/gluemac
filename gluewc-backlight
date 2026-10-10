@@ -2,7 +2,8 @@
 # gluewc-backlight: step the backlight up or down on a ladder that is fine at
 # the bottom and coarse above it: 0 1 2 ... 10 15 20 ... 100. A plain 5% step
 # can never reach 0 and jumps too far when the room is dark. Uses brightnessctl
-# when it is installed and light otherwise; 0 really turns the panel off.
+# when it is installed and light otherwise. Some panels (NVIDIA backlight on
+# MUX laptops) stay lit at 0, so 0 also powers the built-in panel off.
 
 usage() { printf 'usage: gluewc-backlight up|down\n' >&2; exit 2; }
 [ $# -eq 1 ] || usage
@@ -18,6 +19,21 @@ else
 	printf 'gluewc-backlight: neither brightnessctl nor light is installed\n' >&2
 	exit 1
 fi
+
+# built-in panel as gluewc names it: card1-eDP-1 -> eDP-1
+panel() {
+	for c in /sys/class/drm/card*-eDP-* /sys/class/drm/card*-LVDS-* /sys/class/drm/card*-DSI-*; do
+		[ "$(cat "$c/status" 2>/dev/null)" = connected ] || continue
+		c=${c##*/}
+		echo "${c#card*-}"
+		return
+	done
+}
+power() {
+	command -v gluewc-msg >/dev/null 2>&1 && [ -n "$WAYLAND_DISPLAY" ] || return 0
+	p=$(panel)
+	[ -n "$p" ] && gluewc-msg -o "$p" power "$1" 2>/dev/null
+}
 
 set -- "$1" $(get)
 cur=$2; max=$3
@@ -41,3 +57,7 @@ while :; do
 	[ "$t" -le 0 ] || [ "$t" -ge 100 ] && break
 	if [ "$1" = down ]; then t=$((t - 1)); else t=$((t + 1)); fi
 done
+
+if [ "$t" -eq 0 ]; then power off
+elif [ "$1" = up ] && [ "$pct" -eq 0 ]; then power on
+fi
