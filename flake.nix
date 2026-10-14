@@ -60,6 +60,8 @@
               libxkbcommon
               pixman
               libdrm
+              pango
+              librsvg
               libGL
               libgbm
               seatd

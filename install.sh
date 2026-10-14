@@ -763,7 +763,7 @@ install_packages() {
 			pkgconf wayland wayland-protocols libinput libxkbcommon libxcb \
 			xcb-util-wm xcb-util-errors xcb-util-renderutil libdrm mesa \
 			pixman seatd libdisplay-info libliftoff hwdata wlroots0.20 \
-			xorg-xwayland
+			xorg-xwayland pango librsvg
 		;;
 	debian)
 		if [ "$DRY_RUN" -eq 0 ]; then
@@ -778,7 +778,7 @@ install_packages() {
 			libxcb-icccm4-dev libxcb-present-dev libxcb-render0-dev \
 			libxcb-render-util0-dev libxcb-res0-dev libxcb-shm0-dev \
 			libxcb-xfixes0-dev libxcb-xinput-dev libxcb-errors-dev \
-			hwdata xwayland
+			hwdata xwayland libpango1.0-dev librsvg2-dev
 		;;
 	fedora)
 		set -- dnf install -y gcc make git meson ninja-build \
@@ -788,7 +788,7 @@ install_packages() {
 			libseat-devel libdisplay-info-devel libliftoff-devel \
 			systemd-devel libxcb-devel xcb-util-wm-devel \
 			xcb-util-errors-devel xcb-util-renderutil-devel hwdata \
-			xorg-x11-server-Xwayland
+			xorg-x11-server-Xwayland pango-devel librsvg2-devel
 		;;
 	suse)
 		set -- zypper --non-interactive install -t pattern devel_basis \
@@ -797,7 +797,8 @@ install_packages() {
 			libgbm-devel Mesa-libEGL-devel Mesa-libGLESv2-devel \
 			seatd-devel libdisplay-info-devel libliftoff-devel \
 			systemd-devel libxcb-devel xcb-util-wm-devel \
-			xcb-util-errors-devel xcb-util-renderutil-devel xwayland
+			xcb-util-errors-devel xcb-util-renderutil-devel xwayland \
+			pango-devel librsvg-devel
 		;;
 	gentoo)
 		# wlroots 0.20 and SceneFX 0.5 are not in ::gentoo, so only the
@@ -810,7 +811,8 @@ install_packages() {
 			media-libs/mesa sys-auth/seatd media-libs/libdisplay-info \
 			dev-libs/libliftoff sys-apps/hwdata x11-libs/libxcb \
 			x11-libs/xcb-util-wm x11-libs/xcb-util-errors \
-			x11-libs/xcb-util-renderutil x11-base/xwayland
+			x11-libs/xcb-util-renderutil x11-base/xwayland x11-libs/pango \
+			gnome-base/librsvg
 		;;
 	alpine)
 		# alpine calls Ninja ninja-build, and the seat headers live in
@@ -820,7 +822,7 @@ install_packages() {
 			xcb-util-wm-dev xcb-util-errors-dev xcb-util-renderutil-dev \
 			libdrm-dev mesa-dev pixman-dev seatd libseat-dev \
 			libdisplay-info-dev libliftoff-dev hwdata wlroots0.20-dev \
-			xwayland
+			xwayland pango-dev librsvg-dev
 		;;
 	chimera)
 		# Chimera is clang and musl, ships wlroots 0.20 and calls GNU make
@@ -830,7 +832,7 @@ install_packages() {
 			xcb-util-wm-devel xcb-util-errors-devel xcb-util-renderutil-devel \
 			libdrm-devel mesa-devel pixman-devel libseat-devel \
 			libdisplay-info-devel libliftoff-devel hwdata wlroots0.20-devel \
-			xwayland
+			xwayland pango-devel librsvg-devel
 		;;
 	void)
 		set -- xbps-install -Sy base-devel git meson ninja pkg-config \
@@ -839,7 +841,7 @@ install_packages() {
 			libseat-devel libdisplay-info-devel libliftoff-devel \
 			eudev-libudev-devel libxcb-devel xcb-util-wm-devel \
 			xcb-util-errors-devel xcb-util-renderutil-devel hwids \
-			wlroots0.20-devel xorg-server-xwayland
+			wlroots0.20-devel xorg-server-xwayland pango-devel librsvg-devel
 		;;
 	*)
 		# Anything else still builds: the source fallback below produces
