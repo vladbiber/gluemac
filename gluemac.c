@@ -7495,6 +7495,8 @@ mapnotify(struct wl_listener *listener, void *data)
 			wlr_foreign_toplevel_handle_v1_set_title(c->ftl, title);
 		if (appid)
 			wlr_foreign_toplevel_handle_v1_set_app_id(c->ftl, appid);
+		if (c->isfullscreen)
+			wlr_foreign_toplevel_handle_v1_set_fullscreen(c->ftl, 1);
 		LISTEN(&c->ftl->events.request_activate, &c->ftl_activate, ftlactivatenotify);
 		LISTEN(&c->ftl->events.request_close, &c->ftl_close, ftlclosenotify);
 		LISTEN(&c->ftl->events.request_minimize, &c->ftl_minimize, macftlminimize);
@@ -8431,6 +8433,9 @@ setfullscreen(Client *c, int fullscreen)
 	c->isfullscreen = fullscreen;
 	if (fullscreen)
 		c->isfakefull = 0;
+	/* the shell hides its bar and dock over a fullscreen window */
+	if (c->ftl)
+		wlr_foreign_toplevel_handle_v1_set_fullscreen(c->ftl, fullscreen);
 	if (!c->mon || !client_surface(c)->mapped)
 		return;
 	c->bw = (fullscreen || decorhidden) ? 0 : borderpx;
