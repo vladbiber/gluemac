@@ -473,7 +473,7 @@ mcmotion(void)
 		McLayout l;
 		float want;
 		mclayout(m, &l);
-		want = overview_dragging || cursor->y < m->m.y + (mc_bar_to > 0.5f
+		want = mc_spaces_open || overview_dragging || cursor->y < m->m.y + (mc_bar_to > 0.5f
 				? l.strip[0].y + l.strip[0].height + 40 - m->m.y : 34) ? 1.0f : 0.0f;
 		if (want != mc_bar_to) {
 			mc_bar_to = want;
@@ -656,7 +656,7 @@ mcgbegin(int appexpose)
 			snprintf(mc_app, sizeof mc_app, "%s", macappid(sel));
 		}
 		mc_appexpose = appexpose;
-		mc_bar = mc_bar_to = 0.0f;
+		mc_bar = mc_bar_to = mc_spaces_open ? 1.0f : 0.0f;
 		overviewset(1);
 		if (!overview_active)
 			return 0;

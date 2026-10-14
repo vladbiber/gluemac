@@ -48,6 +48,8 @@ static struct {
 static int mc_appexpose;
 /* the Spaces bar: names only until the pointer goes to the top, 0..1 */
 static float mc_bar, mc_bar_to;
+/* the Spaces thumbnails stay open, as before Big Sur; off: names until hover */
+static int mc_spaces_open = 1;
 static char mc_app[128];
 static struct {
 	int active, idx, n;
@@ -1008,7 +1010,7 @@ macmissioncontrol(const Arg *arg)
 	}
 	overviewset(0);
 	mc_appexpose = 0;
-	mc_bar = mc_bar_to = 0.0f;
+	mc_bar = mc_bar_to = mc_spaces_open ? 1.0f : 0.0f;
 	overviewset(1);
 }
 
@@ -1197,6 +1199,8 @@ maccfg(const char *k, const char *v)
 		mac_genie = !strcmp(v, "genie");
 	else if (!strcmp(k, "genie_duration"))
 		mac_genie_duration = atoi(v);
+	else if (!strcmp(k, "mission_control_spaces"))
+		mc_spaces_open = strcmp(v, "names") != 0;
 	else if (!strcmp(k, "titlebar"))
 		mac_titlebar = on;
 	else if (!strcmp(k, "titlebar_height"))
