@@ -120,6 +120,15 @@ else
 	}
 fi
 
+# Window buttons on the left, as on a Mac, for GTK apps. The setting is the
+# user's own and other desktops read it too, so it is put back on the way out.
+BUTTONS_KEY="org.gnome.desktop.wm.preferences button-layout"
+BUTTONS_WAS=
+if command -v gsettings >/dev/null 2>&1; then
+	BUTTONS_WAS=$(gsettings get $BUTTONS_KEY 2>/dev/null)
+	gsettings set $BUTTONS_KEY 'close,minimize,maximize:' 2>/dev/null
+fi
+
 {
 	printf '== gluemac session %s ==\n' "$(date)"
 	printf 'D-Bus: %s\n' "${DBUS_SESSION_BUS_ADDRESS:-none}"
@@ -132,6 +141,7 @@ fi
 	wait "$GLUEMAC_PID"
 	status=$?
 	[ -n "$AUDIO_SUPERVISOR" ] && kill "$AUDIO_SUPERVISOR" 2>/dev/null
+	[ -n "$BUTTONS_WAS" ] && gsettings set $BUTTONS_KEY "$BUTTONS_WAS" 2>/dev/null
 	printf '== gluemac exited status=%s %s ==\n' "$status" "$(date)"
 	sync 2>/dev/null
 	exit "$status"

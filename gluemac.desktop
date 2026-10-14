@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=gluemac
-Comment=Animated BSP Wayland compositor
+Comment=Glue desktop that works like a Mac: floating windows, Spaces, Mission Control, dock
 Exec=gluemac-session
 Type=Application
 DesktopNames=gluemac
