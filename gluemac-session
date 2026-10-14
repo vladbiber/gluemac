@@ -129,6 +129,26 @@ if command -v gsettings >/dev/null 2>&1; then
 	gsettings set $BUTTONS_KEY 'close,minimize,maximize:' 2>/dev/null
 fi
 
+# Mac-coloured window buttons for GTK 3 and 4, a marked block in the user's
+# gtk.css that comes out again on the way out
+GTKCSS_SRC=
+for f in "$(dirname "$0")/../share/gluemac/gluemac-gtk.css" /usr/local/share/gluemac/gluemac-gtk.css /usr/share/gluemac/gluemac-gtk.css; do
+	[ -r "$f" ] && { GTKCSS_SRC=$f; break; }
+done
+gtkcss_strip() {
+	for v in 3.0 4.0; do
+		c="${XDG_CONFIG_HOME:-$HOME/.config}/gtk-$v/gtk.css"
+		[ -f "$c" ] && sed -i '/\/\* gluemac traffic lights \*\//,/\/\* end gluemac traffic lights \*\//d' "$c"
+	done
+}
+gtkcss_strip
+if [ -n "$GTKCSS_SRC" ]; then
+	for v in 3.0 4.0; do
+		d="${XDG_CONFIG_HOME:-$HOME/.config}/gtk-$v"
+		mkdir -p "$d" && cat "$GTKCSS_SRC" >>"$d/gtk.css"
+	done
+fi
+
 {
 	printf '== gluemac session %s ==\n' "$(date)"
 	printf 'D-Bus: %s\n' "${DBUS_SESSION_BUS_ADDRESS:-none}"
@@ -142,6 +162,7 @@ fi
 	status=$?
 	[ -n "$AUDIO_SUPERVISOR" ] && kill "$AUDIO_SUPERVISOR" 2>/dev/null
 	[ -n "$BUTTONS_WAS" ] && gsettings set $BUTTONS_KEY "$BUTTONS_WAS" 2>/dev/null
+	gtkcss_strip
 	printf '== gluemac exited status=%s %s ==\n' "$status" "$(date)"
 	sync 2>/dev/null
 	exit "$status"

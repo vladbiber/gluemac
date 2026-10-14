@@ -87,7 +87,7 @@ dist: clean
 	mkdir -p gluemac-$(VERSION)
 	cp -R .github docs LICENSE* Makefile CHANGELOG.md CONTRIBUTING.md \
 		README.md SECURITY.md install.sh flake.nix client.h config.def.h \
-		config.def.conf config.mk protocols gluemac.1 gluemac.c mac.h mac.c mactext.c macgenie.c macmc.c gluemac-msg.c \
+		config.def.conf gluemac-gtk.css config.mk protocols gluemac.1 gluemac.c mac.h mac.c mactext.c macgenie.c macmc.c gluemac-msg.c \
 		util.c util.h gluemac.desktop gluemac-session gluemac-backlight gluemac-$(VERSION)
 	tar -caf gluemac-$(VERSION).tar.gz gluemac-$(VERSION)
 	rm -rf gluemac-$(VERSION)
@@ -108,6 +108,8 @@ install: gluemac gluemac-msg
 	chmod 644 $(DESTDIR)$(MANDIR)/man1/gluemac.1
 	mkdir -p $(DESTDIR)$(DATADIR)/gluemac
 	cp -f config.def.conf $(DESTDIR)$(DATADIR)/gluemac/config.def.conf
+	cp -f gluemac-gtk.css $(DESTDIR)$(DATADIR)/gluemac/gluemac-gtk.css
+	chmod 644 $(DESTDIR)$(DATADIR)/gluemac/gluemac-gtk.css
 	chmod 644 $(DESTDIR)$(DATADIR)/gluemac/config.def.conf
 	mkdir -p $(DESTDIR)$(DATADIR)/doc/gluemac
 	cp -f README.md CONTRIBUTING.md SECURITY.md $(DESTDIR)$(DATADIR)/doc/gluemac
@@ -119,7 +121,7 @@ install: gluemac gluemac-msg
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/gluemac $(DESTDIR)$(PREFIX)/bin/gluemac-session \
 		$(DESTDIR)$(PREFIX)/bin/gluemac-msg $(DESTDIR)$(MANDIR)/man1/gluemac.1 \
-		$(DESTDIR)$(DATADIR)/gluemac/config.def.conf \
+		$(DESTDIR)$(DATADIR)/gluemac/config.def.conf $(DESTDIR)$(DATADIR)/gluemac/gluemac-gtk.css \
 		$(DESTDIR)$(SESSIONDIR)/gluemac.desktop
 	rm -rf $(DESTDIR)$(DATADIR)/doc/gluemac
 

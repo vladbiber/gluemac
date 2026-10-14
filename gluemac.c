@@ -9723,10 +9723,12 @@ setup(void)
 			(float [4]){0.1f, 0.1f, 0.1f, 1.0f});
 	wlr_scene_node_set_enabled(&locked_bg->node, 0);
 
-	/* Use decoration protocols to negotiate server-side decorations */
+	/* Use decoration protocols to negotiate server-side decorations; when
+	 * stacking, apps draw their own title bars (GTK 3 only asks here) */
 	wlr_server_decoration_manager_set_default_mode(
-			wlr_server_decoration_manager_create(dpy),
-			WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
+			wlr_server_decoration_manager_create(dpy), mac_stacking
+			? WLR_SERVER_DECORATION_MANAGER_MODE_CLIENT
+			: WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
 	xdg_decoration_mgr = wlr_xdg_decoration_manager_v1_create(dpy);
 	wl_signal_add(&xdg_decoration_mgr->events.new_toplevel_decoration, &new_xdg_decoration);
 
