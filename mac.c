@@ -644,6 +644,19 @@ macdesktopoff(void)
 			macunminimize(c);
 }
 
+static void
+macdropshellfocus(void)
+{
+	struct wlr_surface *k = seat->keyboard_state.focused_surface;
+	LayerSurface *l = NULL;
+	Client *x = NULL;
+
+	if (k && toplevel_from_wlr_surface(k, &x, &l) == LayerShell && l
+			&& l->layer_surface->current.keyboard_interactive
+				!= ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE)
+		wlr_seat_keyboard_notify_clear_focus(seat);
+}
+
 /* bring an app forward: its hidden windows come back, the space it is on
  * slides in, and its windows there rise together, this one on top */
 static void
@@ -666,6 +679,9 @@ macactivate(Client *c, int allwindows)
 		wl_list_for_each_reverse(w, &fstack, flink)
 			if (w != c && macsameapp(w, c) && VISIBLEON(w, m))
 				wlr_scene_node_raise_to_top(&w->scene->node);
+	/* the dock or launcher that asked keeps the keyboard otherwise, and
+	 * focusclient leaves a focused overlay alone */
+	macdropshellfocus();
 	focusclient(c, 1);
 }
 
