@@ -14,6 +14,7 @@ static int mac_genie_duration = 520;
 static int mac_titlebar = 1;
 static int mac_titlebar_h = 28;
 static int mac_titlebar_dark;
+static int mac_menubar_h = 30;
 static char mac_font[64] = "SF Pro Display,Inter,Noto Sans";
 static char mac_icon_theme[64] = "";
 static char mac_terminals[512] = "Alacritty alacritty foot footclient kitty "
@@ -1146,7 +1147,8 @@ machotcorner(void)
 }
 
 /* one line per output for the shell: name, focused, current space, how
- * many there are, and which of them hold a fullscreen app */
+ * many there are, which of them hold a fullscreen app, and whether the
+ * pointer has called the bars down over a fullscreen window */
 static void
 macsavestate(void)
 {
@@ -1155,6 +1157,7 @@ macsavestate(void)
 	size_t len = 0;
 	unsigned int i, n;
 	Monitor *m;
+	Client *c;
 	FILE *f;
 
 	if (!mac_stacking || !(f = open_memstream(&text, &len)))
@@ -1166,7 +1169,8 @@ macsavestate(void)
 		fprintf(f, "%s %d %u %u ", m->wlr_output->name, m == selmon, m->ws, n);
 		for (i = 0; i < n; i++)
 			fprintf(f, "%s%d", i ? "," : "", macfsspace(m, i));
-		fputc('\n', f);
+		c = focustop(m);
+		fprintf(f, " %d\n", c && c->isfullscreen && c->tbreveal);
 	}
 	fclose(f);
 	statewrite("spaces", &last, text, len);
@@ -1199,6 +1203,8 @@ maccfg(const char *k, const char *v)
 		mac_titlebar_h = MAX(16, MIN(64, atoi(v)));
 	else if (!strcmp(k, "titlebar_theme"))
 		mac_titlebar_dark = !strcmp(v, "dark");
+	else if (!strcmp(k, "menubar_height"))
+		mac_menubar_h = MAX(0, MIN(64, atoi(v)));
 	else if (!strcmp(k, "gesture_pinch_in") || !strcmp(k, "gesture_pinch_out")) {
 		i = !strcmp(k, "gesture_pinch_out");
 		mac_pinch[i].func = NULL;

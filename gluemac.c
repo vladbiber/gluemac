@@ -160,6 +160,7 @@ struct Client {
 	struct wlr_scene_buffer *titlebar; /* the Mac title bar, mactitle.c */
 	int tb; /* its height, 0 without one; part of geom like the border */
 	uint32_t tbhash;
+	int tbreveal; /* full screen: the bar called down by the pointer */
 	struct wlr_foreign_toplevel_handle_v1 *ftl;
 	struct wl_list link;
 	struct wl_list flink;
