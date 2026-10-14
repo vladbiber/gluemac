@@ -15,6 +15,8 @@
 #include <wayland-client.h>
 #include "vptr-protocol.h"
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 static struct wl_seat *seat;
 static struct zwlr_virtual_pointer_manager_v1 *vpm;
 
@@ -110,6 +112,8 @@ int main(int argc, char *argv[])
 		} else if (!strcmp(argv[i], "sleep") && i + 1 < argc) {
 			wl_display_roundtrip(dpy);
 			usleep(atoi(argv[i + 1]) * 1000);
+			clock_gettime(CLOCK_MONOTONIC, &ts);
+			t = MAX(t, (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000));
 			i += 1;
 		} else {
 			fprintf(stderr, "bad command %s\n", argv[i]);

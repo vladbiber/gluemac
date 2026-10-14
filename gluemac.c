@@ -3838,9 +3838,14 @@ layerclickfocus(void)
 	if (exclusive_focus)
 		return;
 	xytonode(cursor->x, cursor->y, &surface, NULL, NULL, NULL, NULL);
+	/* below the windows exclusive cannot hold the keyboard, so a desktop
+	 * asking for it gets it on click like on-demand */
 	if (!surface || toplevel_from_wlr_surface(surface, &x, &l) != LayerShell || !l
-			|| l->layer_surface->current.keyboard_interactive
-				!= ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND)
+			|| (l->layer_surface->current.keyboard_interactive
+				!= ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND
+			&& !(l->layer_surface->current.keyboard_interactive
+				== ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE
+			&& l->layer_surface->current.layer < ZWLR_LAYER_SHELL_V1_LAYER_TOP)))
 		return;
 	if (seat->keyboard_state.focused_surface == l->layer_surface->surface)
 		return;
