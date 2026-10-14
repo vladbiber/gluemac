@@ -120,21 +120,17 @@ else
 	}
 fi
 
-# Window buttons on the left, as on a Mac, for GTK apps. The setting is the
-# user's own and other desktops read it too, so it is put back on the way out.
+# gluemac draws the title bar with the window buttons, so GTK apps show none
+# of their own. The setting is the user's own and other desktops read it too,
+# so it is put back on the way out.
 BUTTONS_KEY="org.gnome.desktop.wm.preferences button-layout"
 BUTTONS_WAS=
 if command -v gsettings >/dev/null 2>&1; then
 	BUTTONS_WAS=$(gsettings get $BUTTONS_KEY 2>/dev/null)
-	gsettings set $BUTTONS_KEY 'close,minimize,maximize:' 2>/dev/null
+	gsettings set $BUTTONS_KEY ':' 2>/dev/null
 fi
 
-# Mac-coloured window buttons for GTK 3 and 4, a marked block in the user's
-# gtk.css that comes out again on the way out
-GTKCSS_SRC=
-for f in "$(dirname "$0")/../share/gluemac/gluemac-gtk.css" /usr/local/share/gluemac/gluemac-gtk.css /usr/share/gluemac/gluemac-gtk.css; do
-	[ -r "$f" ] && { GTKCSS_SRC=$f; break; }
-done
+# earlier versions put coloured title buttons into the user's gtk.css
 gtkcss_strip() {
 	for v in 3.0 4.0; do
 		c="${XDG_CONFIG_HOME:-$HOME/.config}/gtk-$v/gtk.css"
@@ -142,12 +138,6 @@ gtkcss_strip() {
 	done
 }
 gtkcss_strip
-if [ -n "$GTKCSS_SRC" ]; then
-	for v in 3.0 4.0; do
-		d="${XDG_CONFIG_HOME:-$HOME/.config}/gtk-$v"
-		mkdir -p "$d" && cat "$GTKCSS_SRC" >>"$d/gtk.css"
-	done
-fi
 
 {
 	printf '== gluemac session %s ==\n' "$(date)"

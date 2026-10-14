@@ -32,7 +32,7 @@ gluemac-msg: gluemac-msg.o dwl-ipc-unstable-v2-protocol.o wlr-output-power-manag
 gluemac-msg.o: gluemac-msg.c dwl-ipc-unstable-v2-client-protocol.h \
 	wlr-output-power-management-unstable-v1-client-protocol.h
 	$(CC) $(CPPFLAGS) $(MSGCFLAGS) -o $@ -c gluemac-msg.c
-gluemac.o: gluemac.c client.h config.h config.mk mac.h mac.c mactext.c macgenie.c macmc.c cursor-shape-v1-protocol.h \
+gluemac.o: gluemac.c client.h config.h config.mk mac.h mac.c mactext.c mactitle.c macgenie.c macmc.c cursor-shape-v1-protocol.h \
 	dwl-ipc-unstable-v2-protocol.h \
 	pointer-constraints-unstable-v1-protocol.h wlr-layer-shell-unstable-v1-protocol.h \
 	wlr-output-power-management-unstable-v1-protocol.h xdg-shell-protocol.h
@@ -87,7 +87,7 @@ dist: clean
 	mkdir -p gluemac-$(VERSION)
 	cp -R .github docs LICENSE* Makefile CHANGELOG.md CONTRIBUTING.md \
 		README.md SECURITY.md install.sh flake.nix client.h config.def.h \
-		config.def.conf gluemac-gtk.css config.mk protocols gluemac.1 gluemac.c mac.h mac.c mactext.c macgenie.c macmc.c gluemac-msg.c \
+		config.def.conf config.mk protocols gluemac.1 gluemac.c mac.h mac.c mactext.c mactitle.c macgenie.c macmc.c gluemac-msg.c \
 		util.c util.h gluemac.desktop gluemac-session gluemac-backlight gluemac-$(VERSION)
 	tar -caf gluemac-$(VERSION).tar.gz gluemac-$(VERSION)
 	rm -rf gluemac-$(VERSION)
@@ -108,8 +108,6 @@ install: gluemac gluemac-msg
 	chmod 644 $(DESTDIR)$(MANDIR)/man1/gluemac.1
 	mkdir -p $(DESTDIR)$(DATADIR)/gluemac
 	cp -f config.def.conf $(DESTDIR)$(DATADIR)/gluemac/config.def.conf
-	cp -f gluemac-gtk.css $(DESTDIR)$(DATADIR)/gluemac/gluemac-gtk.css
-	chmod 644 $(DESTDIR)$(DATADIR)/gluemac/gluemac-gtk.css
 	chmod 644 $(DESTDIR)$(DATADIR)/gluemac/config.def.conf
 	mkdir -p $(DESTDIR)$(DATADIR)/doc/gluemac
 	cp -f README.md CONTRIBUTING.md SECURITY.md $(DESTDIR)$(DATADIR)/doc/gluemac

@@ -157,6 +157,9 @@ struct Client {
 	struct wlr_scene_buffer *surfbuf; /* main surface buffer, for fx */
 	struct wlr_scene_blur *blur; /* backdrop blur behind that buffer */
 	struct wlr_scene_shadow *shadow; /* drop shadow in stacking mode */
+	struct wlr_scene_buffer *titlebar; /* the Mac title bar, mactitle.c */
+	int tb; /* its height, 0 without one; part of geom like the border */
+	uint32_t tbhash;
 	struct wlr_foreign_toplevel_handle_v1 *ftl;
 	struct wl_list link;
 	struct wl_list flink;
@@ -1108,7 +1111,7 @@ void
 clientclip(Client *c)
 {
 	struct wlr_box clip, crop, vis;
-	int bw, sx1, sy1, sx2, sy2, r;
+	int bw, by, sx1, sy1, sx2, sy2, r;
 
 	if (!c->mon || !c->scene || !c->scene_surface
 			|| !client_surface(c)->mapped || client_is_unmanaged(c))
@@ -1117,33 +1120,36 @@ clientclip(Client *c)
 	if (c->bufscale != 1.0 || (c->anim.scale > 0.0f && c->anim.scale < 1.0f))
 		return;
 	bw = (int)c->bw;
+	by = bw + c->tb;
 	clientcropbox(c, &crop);
 	vis = (struct wlr_box){0, 0, c->geom.width, c->geom.height};
 	if (!boxclip(&vis, &crop)) {
 		clientoffscreen(c, 1);
+		mactbupdate(c);
 		return;
 	}
 	clientoffscreen(c, 0);
+	mactbupdate(c);
 
 	client_get_clip(c, &clip);
 	if (DRIFTLT(c->mon) && c->oncanvas && !c->isfloating
 			&& !c->isfullscreen && !c->isfakefull) {
 		clip.width = MAX(1, c->canvas.width - 2 * bw);
-		clip.height = MAX(1, c->canvas.height - 2 * bw);
+		clip.height = MAX(1, c->canvas.height - 2 * bw - c->tb);
 	}
 	/* the surface sits at (bw, bw) in the frame; keep the part of it that
 	 * the visible box covers.  The clip is in surface coordinates and does
 	 * not move anything: wlroots parks the cropped buffer at the clip's
 	 * own origin, so the tree stays where it is and the cut lands right. */
 	sx1 = MAX(bw, vis.x);
-	sy1 = MAX(bw, vis.y);
+	sy1 = MAX(by, vis.y);
 	sx2 = MIN(bw + clip.width, vis.x + vis.width);
-	sy2 = MIN(bw + clip.height, vis.y + vis.height);
+	sy2 = MIN(by + clip.height, vis.y + vis.height);
 	if (sx2 <= sx1 || sy2 <= sy1) {
 		wlr_scene_node_set_enabled(&c->scene_surface->node, 0);
 	} else {
 		clip.x += sx1 - bw;
-		clip.y += sy1 - bw;
+		clip.y += sy1 - by;
 		clip.width = sx2 - sx1;
 		clip.height = sy2 - sy1;
 		wlr_scene_node_set_enabled(&c->scene_surface->node, 1);
@@ -1201,7 +1207,11 @@ applyeffects(Client *c)
 		wlr_scene_rect_set_corner_radii(c->border.bottom_left, corner_radii_new(0, 0, 0, r));
 	}
 	if (c->surfbuf) {
-		wlr_scene_buffer_set_corner_radius(c->surfbuf, MAX(0, r - (int)c->bw));
+		if (c->tb)
+			wlr_scene_buffer_set_corner_radii(c->surfbuf, corner_radii_new(0, 0,
+					MAX(0, r - (int)c->bw), MAX(0, r - (int)c->bw)));
+		else
+			wlr_scene_buffer_set_corner_radius(c->surfbuf, MAX(0, r - (int)c->bw));
 		if (!c->anim.fadein)
 			wlr_scene_buffer_set_opacity(c->surfbuf, clientopacity(c));
 	}
@@ -1528,7 +1538,7 @@ applybounds(Client *c, struct wlr_box *bbox)
 {
 	/* set minimum possible */
 	c->geom.width = MAX(1 + 2 * (int)c->bw, c->geom.width);
-	c->geom.height = MAX(1 + 2 * (int)c->bw, c->geom.height);
+	c->geom.height = MAX(1 + 2 * (int)c->bw + c->tb, c->geom.height);
 
 	if (c->geom.x >= bbox->x + bbox->width)
 		c->geom.x = bbox->x + bbox->width - c->geom.width;
@@ -3649,8 +3659,9 @@ clientscale(Client *c, float z)
 	clientoffscreen(c, 0);
 	clientborders(c, w, h, bw, r, &vis);
 	client_get_clip(c, &clip);
-	driftscalesurface(c->scene_surface, client_surface(c), z, bw, bw, &clip,
-			&crop);
+	mactbscale(c, z, bw);
+	driftscalesurface(c->scene_surface, client_surface(c), z, bw,
+			bw + (int)roundf(c->tb * z), &clip, &crop);
 }
 
 void
@@ -3672,8 +3683,8 @@ clientunscale(Client *c)
 					MIN(c->geom.width, c->geom.height) / 2);
 	clientborders(c, c->geom.width, c->geom.height, bw, r, NULL);
 	client_get_clip(c, &clip);
-	driftscalesurface(c->scene_surface, client_surface(c), 1.0, bw, bw, &clip,
-			NULL);
+	driftscalesurface(c->scene_surface, client_surface(c), 1.0, bw, bw + c->tb,
+			&clip, NULL);
 	clientclip(c);
 }
 
@@ -3906,8 +3917,12 @@ buttonpress(struct wl_listener *listener, void *data)
 				return;
 			}
 		}
+		if (c && mactbbutton(c, event))
+			return;
 		break;
 	case WL_POINTER_BUTTON_STATE_RELEASED:
+		if (mactbrelease())
+			return;
 		/* If you released any buttons, we exit interactive move/resize mode. */
 		/* TODO: should reset to the pointer focus's current setcursor */
 		if (!locked && cursor_mode != CurNormal && cursor_mode != CurPressed) {
@@ -4281,7 +4296,7 @@ commitpopup(struct wl_listener *listener, void *data)
 	}
 	box = type == LayerShell ? l->mon->m : c->mon->w;
 	box.x -= (type == LayerShell ? l->scene->node.x : c->geom.x);
-	box.y -= (type == LayerShell ? l->scene->node.y : c->geom.y);
+	box.y -= (type == LayerShell ? l->scene->node.y : c->geom.y + (int)c->bw + c->tb);
 	wlr_xdg_popup_unconstrain_from_box(popup, &box);
 	wl_list_remove(&listener->link);
 	free(listener);
@@ -5168,7 +5183,7 @@ cursorwarptohint(void)
 
 	toplevel_from_wlr_surface(active_constraint->surface, &c, NULL);
 	if (c && active_constraint->current.cursor_hint.enabled) {
-		wlr_cursor_warp(cursor, NULL, sx + c->geom.x + c->bw, sy + c->geom.y + c->bw);
+		wlr_cursor_warp(cursor, NULL, sx + c->geom.x + c->bw, sy + c->geom.y + c->bw + c->tb);
 		wlr_seat_pointer_warp(active_constraint->seat, sx, sy);
 	}
 }
@@ -5464,6 +5479,8 @@ focusclient(Client *c, int lift)
 	if (!c) {
 		/* With no client, all we have left is to clear focus */
 		wlr_seat_keyboard_notify_clear_focus(seat);
+		if (old_c)
+			mactbupdate(old_c);
 		return;
 	}
 
@@ -5477,6 +5494,9 @@ focusclient(Client *c, int lift)
 
 	/* Activate the new client */
 	client_activate_surface(client_surface(c), 1);
+	mactbupdate(c);
+	if (old_c && old_c != c)
+		mactbupdate(old_c);
 }
 
 void
@@ -7482,8 +7502,9 @@ mapnotify(struct wl_listener *listener, void *data)
 
 	/* Initialize client geometry with room for border */
 	client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT | WLR_EDGE_RIGHT);
+	c->tb = mactbwanted(c) ? mac_titlebar_h : 0;
 	c->geom.width += 2 * c->bw;
-	c->geom.height += 2 * c->bw;
+	c->geom.height += 2 * c->bw + c->tb;
 
 	/* Insert this client into client lists. */
 	wl_list_insert(&clients, &c->link);
@@ -7661,7 +7682,7 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 			toplevel_from_wlr_surface(active_constraint->surface, &c, NULL);
 			if (c && active_constraint->surface == seat->pointer_state.focused_surface) {
 				sx = cursor->x - c->geom.x - c->bw;
-				sy = cursor->y - c->geom.y - c->bw;
+				sy = cursor->y - c->geom.y - c->bw - c->tb;
 				if (wlr_region_confine(&active_constraint->region, sx, sy,
 						sx + dx, sy + dy, &sx_confined, &sy_confined)) {
 					dx = sx_confined - sx;
@@ -7746,6 +7767,7 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 	 * off of a client or over its border. */
 	if (!surface && !seat->drag)
 		wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
+	mactbmotion(c);
 
 	pointerfocus(c, surface, sx, sy, time);
 }
@@ -8181,7 +8203,8 @@ requestdecorationmode(struct wl_listener *listener, void *data)
 {
 	Client *c = wl_container_of(listener, c, set_decoration_mode);
 	if (c->surface.xdg->initialized)
-		wlr_xdg_toplevel_decoration_v1_set_mode(c->decoration, mac_stacking
+		wlr_xdg_toplevel_decoration_v1_set_mode(c->decoration,
+				mac_stacking && !mac_titlebar
 				? WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE
 				: WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
 }
@@ -8222,13 +8245,14 @@ resize(Client *c, struct wlr_box geo, int interact)
 	drifted = DRIFTLT(c->mon) && c->oncanvas && !c->isfloating && !interact
 			&& !c->isfullscreen && !c->isfakefull;
 
-	client_set_bounds(c, geo.width, geo.height);
+	c->tb = mactbwanted(c) ? mac_titlebar_h : 0;
+	client_set_bounds(c, geo.width, geo.height - c->tb);
 	c->geom = geo;
 	if ((SCROLLLT(c->mon) || drifted) && !c->isfloating && !interact) {
 		/* scroll columns and canvas windows legitimately extend past the
 		 * viewport, so only enforce the minimum size */
 		c->geom.width = MAX(1 + 2 * (int)c->bw, c->geom.width);
-		c->geom.height = MAX(1 + 2 * (int)c->bw, c->geom.height);
+		c->geom.height = MAX(1 + 2 * (int)c->bw + c->tb, c->geom.height);
 	} else {
 		applybounds(c, bbox);
 	}
@@ -8249,7 +8273,7 @@ resize(Client *c, struct wlr_box geo, int interact)
 	/* Update scene-graph, including the border */
 	if (!c->anim.active)
 		wlr_scene_node_set_position(&c->scene->node, c->geom.x, c->geom.y);
-	wlr_scene_node_set_position(&c->scene_surface->node, c->bw, c->bw);
+	wlr_scene_node_set_position(&c->scene_surface->node, c->bw, c->bw + c->tb);
 
 	/* a window that left the canvas keeps its scaled buffers until it next
 	 * commits, which is long enough to click on the wrong place */
@@ -8262,10 +8286,10 @@ resize(Client *c, struct wlr_box geo, int interact)
 		 * to its buffers instead, so it never sees a resize */
 		serial = client_set_size(c,
 				MAX(1, c->canvas.width - 2 * (int)c->bw),
-				MAX(1, c->canvas.height - 2 * (int)c->bw));
+				MAX(1, c->canvas.height - 2 * (int)c->bw - c->tb));
 	} else {
 		serial = client_set_size(c, c->geom.width - 2 * c->bw,
-				c->geom.height - 2 * c->bw);
+				c->geom.height - 2 * c->bw - c->tb);
 	}
 	if (serial && serial != c->resize)
 		c->resizeat = now_ms();
@@ -8273,7 +8297,7 @@ resize(Client *c, struct wlr_box geo, int interact)
 	client_get_clip(c, &clip);
 	if (drifted) {
 		clip.width = MAX(1, c->canvas.width - 2 * (int)c->bw);
-		clip.height = MAX(1, c->canvas.height - 2 * (int)c->bw);
+		clip.height = MAX(1, c->canvas.height - 2 * (int)c->bw - c->tb);
 	}
 	wlr_scene_subsurface_tree_set_clip(&c->scene_surface->node, &clip);
 	if (drifted && (driftz(c->mon, c->ws) != 1.0 || c->mon->driftscaled))
@@ -9723,10 +9747,11 @@ setup(void)
 			(float [4]){0.1f, 0.1f, 0.1f, 1.0f});
 	wlr_scene_node_set_enabled(&locked_bg->node, 0);
 
-	/* Use decoration protocols to negotiate server-side decorations; when
-	 * stacking, apps draw their own title bars (GTK 3 only asks here) */
+	/* Use decoration protocols to negotiate server-side decorations; the Mac
+	 * title bar is ours, apps only draw their own with titlebar = false */
 	wlr_server_decoration_manager_set_default_mode(
-			wlr_server_decoration_manager_create(dpy), mac_stacking
+			wlr_server_decoration_manager_create(dpy),
+			mac_stacking && !mac_titlebar
 			? WLR_SERVER_DECORATION_MANAGER_MODE_CLIENT
 			: WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
 	xdg_decoration_mgr = wlr_xdg_decoration_manager_v1_create(dpy);
@@ -10393,6 +10418,9 @@ unmapnotify(struct wl_listener *listener, void *data)
 	c->border.bottom_right = c->border.bottom_left = NULL;
 	c->blur = NULL;
 	c->shadow = NULL;
+	c->titlebar = NULL;
+	c->tbhash = 0;
+	mactbforget(c);
 	motionnotify(0, NULL, 0, 0, 0, 0);
 	macunmapped();
 	ipcnotifyall();
@@ -10522,6 +10550,7 @@ updatetitle(struct wl_listener *listener, void *data)
 	const char *title = client_get_title(c);
 	if (c->ftl && title)
 		wlr_foreign_toplevel_handle_v1_set_title(c->ftl, title);
+	mactbupdate(c);
 	ipcnotifyall();
 }
 
@@ -10638,8 +10667,8 @@ configurex11(struct wl_listener *listener, void *data)
 	}
 	if (c->isfloating && c != grabc) {
 		resize(c, (struct wlr_box){.x = event->x - c->bw,
-				.y = event->y - c->bw, .width = event->width + c->bw * 2,
-				.height = event->height + c->bw * 2}, 0);
+				.y = event->y - c->bw - c->tb, .width = event->width + c->bw * 2,
+				.height = event->height + c->bw * 2 + c->tb}, 0);
 	} else {
 		arrange(c->mon);
 	}

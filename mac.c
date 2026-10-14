@@ -11,6 +11,9 @@ static int mac_spaces = 1;
 static int mac_edge_tiling = 1;
 static int mac_genie = 1;
 static int mac_genie_duration = 520;
+static int mac_titlebar = 1;
+static int mac_titlebar_h = 28;
+static int mac_titlebar_dark;
 static char mac_font[64] = "SF Pro Display,Inter,Noto Sans";
 static char mac_icon_theme[64] = "";
 static char mac_terminals[512] = "Alacritty alacritty foot footclient kitty "
@@ -1190,6 +1193,12 @@ maccfg(const char *k, const char *v)
 		mac_genie = !strcmp(v, "genie");
 	else if (!strcmp(k, "genie_duration"))
 		mac_genie_duration = atoi(v);
+	else if (!strcmp(k, "titlebar"))
+		mac_titlebar = on;
+	else if (!strcmp(k, "titlebar_height"))
+		mac_titlebar_h = MAX(16, MIN(64, atoi(v)));
+	else if (!strcmp(k, "titlebar_theme"))
+		mac_titlebar_dark = !strcmp(v, "dark");
 	else if (!strcmp(k, "gesture_pinch_in") || !strcmp(k, "gesture_pinch_out")) {
 		i = !strcmp(k, "gesture_pinch_out");
 		mac_pinch[i].func = NULL;
@@ -1216,3 +1225,4 @@ maccfg(const char *k, const char *v)
 #include "mactext.c"
 #include "macgenie.c"
 #include "macmc.c"
+#include "mactitle.c"

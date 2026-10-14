@@ -138,7 +138,7 @@ client_get_clip(Client *c, struct wlr_box *clip)
 		.x = 0,
 		.y = 0,
 		.width = c->geom.width - c->bw,
-		.height = c->geom.height - c->bw,
+		.height = c->geom.height - c->bw - c->tb,
 	};
 
 #ifdef XWAYLAND
@@ -367,7 +367,7 @@ client_set_size(Client *c, uint32_t width, uint32_t height)
 #ifdef XWAYLAND
 	if (client_is_x11(c)) {
 		wlr_xwayland_surface_configure(c->surface.xwayland,
-				c->geom.x + c->bw, c->geom.y + c->bw, width, height);
+				c->geom.x + c->bw, c->geom.y + c->bw + c->tb, width, height);
 		return 0;
 	}
 #endif
