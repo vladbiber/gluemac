@@ -968,16 +968,14 @@ machotcorner(void)
 static void
 macsavestate(void)
 {
-	char path[600], dir[512];
+	static char *last;
+	char *text = NULL;
+	size_t len = 0;
 	unsigned int i, n;
 	Monitor *m;
 	FILE *f;
 
-	if (!mac_stacking || !layoutstatepath(dir, sizeof dir))
-		return;
-	mkdir(dir, 0700);
-	snprintf(path, sizeof path, "%s/spaces", dir);
-	if (!(f = fopen(path, "w")))
+	if (!mac_stacking || !(f = open_memstream(&text, &len)))
 		return;
 	wl_list_for_each(m, &mons, link) {
 		if (!m->wlr_output->enabled || m->mirroring)
@@ -989,6 +987,7 @@ macsavestate(void)
 		fputc('\n', f);
 	}
 	fclose(f);
+	statewrite("spaces", &last, text, len);
 }
 
 static int

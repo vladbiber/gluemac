@@ -1,6 +1,7 @@
 /*
  * See LICENSE file for copyright and license details.
  */
+#include <errno.h>
 #include <getopt.h>
 #include <sys/inotify.h>
 #include <limits.h>
@@ -389,9 +390,22 @@ typedef struct {
 typedef struct {
 	struct wlr_scene_tree *tree;
 	float scalex, scaley, opacity;
-	int srcx, srcy, x, y, radius, count;
+	int srcx, srcy, x, y, radius, count, seen;
 	struct wlr_box clip; /* the monitor: nothing is drawn past its edge */
+	Client *client;
 } OverviewClone;
+
+/* a buffer of a window cloned into an overview card, kept so a window that
+ * only paints a new frame gets it swapped in instead of a rebuild */
+typedef struct {
+	struct wl_list link;
+	struct wl_listener destroy;
+	Client *c;
+	struct wlr_scene_buffer *src, *clone;
+	struct wlr_box geom;
+	struct wlr_fbox src_box;
+	int sx, sy, width, height, dst_width, dst_height, nlive;
+} OverviewCard;
 
 typedef struct {
 	struct wl_list link;
@@ -569,6 +583,7 @@ static void saveoutputstate(void);
 static const char *transformname(enum wl_output_transform t);
 static void overviewbuild(void);
 static void overviewtouch(Client *c);
+static int overviewcardsupdate(Client *c);
 static void overviewframes(Monitor *m, struct timespec *now);
 static void overviewbutton(struct wlr_pointer_button_event *event);
 static void overviewclone(struct wlr_scene_buffer *buffer, int sx, int sy, void *data);
@@ -632,6 +647,8 @@ static void setfloating(Client *c, int floating);
 static void setfullscreen(Client *c, int fullscreen);
 static void setlayout(Monitor *m, unsigned int lt);
 static int layoutstatepath(char *buf, size_t size);
+static int statefile(char *path, size_t size, const char *name);
+static void statewrite(const char *name, char **last, char *text, size_t len);
 static const char *layoutname(unsigned int lt);
 static void loadlayoutstate(void);
 static void savelayoutstate(unsigned int lt);
@@ -702,6 +719,7 @@ static struct wlr_scene_tree *overview_dim_scene;
 static struct wlr_scene_tree *overview_scene;
 static struct wlr_scene_tree *overview_panels_scene;
 static struct wlr_scene_tree *overview_drag_scene;
+static struct wl_list overview_cards;
 static struct wl_list close_anims;
 static int overview_active;
 static int overview_visible;
@@ -4758,23 +4776,13 @@ fputfield(FILE *f, const char *s)
 void
 saveoutputstate(void)
 {
-	char path[600], dir[512];
+	char path[600];
 	Monitor *m;
 	struct wlr_output_mode *mode, *pref;
 	FILE *f;
 
-	if (!layoutstatepath(dir, sizeof dir))
+	if (!statefile(path, sizeof path, "outputs"))
 		return;
-	{
-		char *slash = strrchr(dir, '/');
-		if (slash) {
-			*slash = '\0';
-			mkdir(dir, 0700);
-			*slash = '/';
-		}
-	}
-	mkdir(dir, 0700);
-	snprintf(path, sizeof path, "%s/outputs", dir);
 	if (!(f = fopen(path, "w")))
 		return;
 	wl_list_for_each(m, &mons, link) {
@@ -5676,18 +5684,14 @@ ipcstatus(IpcOutput *io)
 static void
 saveworkspacestate(void)
 {
-	char path[600], dir[512];
+	static char *last;
+	char *text = NULL;
+	size_t len = 0;
 	Monitor *m;
 	Client *c;
 	FILE *f;
 
-	if (!layoutstatepath(dir, sizeof dir))
-		return;
-	mkdir(dir, 0700);
-	snprintf(path, sizeof path, "%s/workspaces", dir);
-	/* written in place, like the overview file: a rename would swap the
-	 * inode out from under a file watcher and it would stop noticing */
-	if (!(f = fopen(path, "w")))
+	if (!(f = open_memstream(&text, &len)))
 		return;
 	wl_list_for_each(m, &mons, link) {
 		uint32_t wscnt[NUMWS] = {0};
@@ -5704,6 +5708,39 @@ saveworkspacestate(void)
 		fprintf(f, " %s\n", layoutname(m->lt));
 	}
 	fclose(f);
+	statewrite("workspaces", &last, text, len);
+}
+
+/* Writes a state file only when its text changed, so a title change or a
+ * relayout that moves nothing does not wake every watcher. Written in place:
+ * a rename would swap the inode out from under a file watcher. */
+static void
+statewrite(const char *name, char **last, char *text, size_t len)
+{
+	char path[600];
+	FILE *f;
+
+	if (!text)
+		return;
+	if ((*last && !strcmp(*last, text)) || !statefile(path, sizeof path, name)
+			|| !(f = fopen(path, "w"))) {
+		free(text);
+		return;
+	}
+	fwrite(text, 1, len, f);
+	fclose(f);
+	free(*last);
+	*last = text;
+}
+
+static struct wl_event_source *statesync_idle;
+
+static void
+statesync(void *data)
+{
+	statesync_idle = NULL;
+	saveworkspacestate();
+	macsavestate();
 }
 
 void
@@ -5712,8 +5749,11 @@ ipcnotifyall(void)
 	IpcOutput *io;
 	wl_list_for_each(io, &ipc_outputs, link)
 		ipcstatus(io);
-	saveworkspacestate();
-	macsavestate();
+	/* the files are written once per loop iteration, however many changes
+	 * that iteration made */
+	if (!statesync_idle)
+		statesync_idle = wl_event_loop_add_idle(wl_display_get_event_loop(dpy),
+				statesync, NULL);
 }
 
 static void
@@ -5813,7 +5853,8 @@ overviewtouch(Client *c)
 {
 	if (!overview_visible || !c || !c->mon)
 		return;
-	overview_dirty = 1;
+	if (overview_dirty || !overviewcardsupdate(c))
+		overview_dirty = 1;
 	wlr_output_schedule_frame(c->mon->wlr_output);
 }
 
@@ -5839,6 +5880,117 @@ overviewframes(Monitor *m, struct timespec *now)
 			wlr_surface_for_each_surface(client_surface(c),
 					overviewframedone, now);
 	}
+}
+
+static void
+overviewcarddestroy(struct wl_listener *listener, void *data)
+{
+	OverviewCard *e = wl_container_of(listener, e, destroy);
+
+	wl_list_remove(&e->link);
+	wl_list_remove(&e->destroy.link);
+	free(e);
+}
+
+static void
+overviewcardadd(Client *c, struct wlr_scene_buffer *src,
+		struct wlr_scene_buffer *clone, int sx, int sy)
+{
+	OverviewCard *e = ecalloc(1, sizeof(*e));
+
+	*e = (OverviewCard){.c = c, .src = src, .clone = clone, .geom = c->geom,
+		.src_box = src->src_box, .sx = sx, .sy = sy,
+		.width = src->buffer->width, .height = src->buffer->height,
+		.dst_width = src->dst_width, .dst_height = src->dst_height};
+	e->destroy.notify = overviewcarddestroy;
+	wl_signal_add(&clone->node.events.destroy, &e->destroy);
+	wl_list_insert(overview_cards.prev, &e->link);
+}
+
+/* runs fn over a window's buffers even while it is hidden or cut by the
+ * monitor edge, the way the overview clones it */
+static void
+clientforeachbuffer(Client *c, wlr_scene_buffer_iterator_func_t fn, void *data)
+{
+	int enabled = c->scene->node.enabled;
+
+	if (!enabled)
+		wlr_scene_node_set_enabled(&c->scene->node, 1);
+	if (c->scene_surface && (c->offscreen || !c->scene_surface->node.enabled))
+		wlr_scene_node_set_enabled(&c->scene_surface->node, 1);
+	wlr_scene_node_for_each_buffer(&c->scene->node, fn, data);
+	if (c->scene_surface && c->offscreen)
+		wlr_scene_node_set_enabled(&c->scene_surface->node, 0);
+	else if (c->scene_surface && !enabled)
+		clientclip(c);
+	if (!enabled)
+		wlr_scene_node_set_enabled(&c->scene->node, 0);
+}
+
+typedef struct {
+	struct wlr_scene_buffer *buf[32];
+	int sx[32], sy[32], n;
+} CardBuffers;
+
+static void
+cardbuffer(struct wlr_scene_buffer *b, int sx, int sy, void *data)
+{
+	CardBuffers *cb = data;
+
+	if (!b->buffer)
+		return;
+	if (cb->n < (int)LENGTH(cb->buf)) {
+		cb->buf[cb->n] = b;
+		cb->sx[cb->n] = sx;
+		cb->sy[cb->n] = sy;
+	}
+	cb->n++;
+}
+
+/* Swaps a window's new frame into its cards. Returns 0 when anything but
+ * the pixels changed (size, position, a new subsurface), so the caller
+ * rebuilds the overview. */
+static int
+overviewcardsupdate(Client *c)
+{
+	CardBuffers cb = {0};
+	OverviewCard *e;
+	int i, any = 0;
+
+	if (!c->scene || c->anim.active)
+		return 0;
+	clientforeachbuffer(c, cardbuffer, &cb);
+	if (cb.n > (int)LENGTH(cb.buf))
+		return 0;
+	wl_list_for_each(e, &overview_cards, link) {
+		if (e->c != c)
+			continue;
+		any = 1;
+		if (e->nlive != cb.n || memcmp(&e->geom, &c->geom, sizeof(e->geom)))
+			return 0;
+		for (i = 0; i < cb.n && cb.buf[i] != e->src; i++)
+			;
+		if (i == cb.n || cb.sx[i] != e->sx || cb.sy[i] != e->sy
+				|| e->src->buffer->width != e->width
+				|| e->src->buffer->height != e->height
+				|| e->src->dst_width != e->dst_width
+				|| e->src->dst_height != e->dst_height
+				|| memcmp(&e->src->src_box, &e->src_box, sizeof(e->src_box)))
+			return 0;
+	}
+	if (!any)
+		return cb.n == 0;
+	wl_list_for_each(e, &overview_cards, link) {
+		struct wlr_scene_buffer_set_buffer_options options;
+		if (e->c != c)
+			continue;
+		options = (struct wlr_scene_buffer_set_buffer_options){
+			.wait_timeline = e->src->WLR_PRIVATE.wait_timeline,
+			.wait_point = e->src->WLR_PRIVATE.wait_point,
+		};
+		wlr_scene_buffer_set_buffer_with_options(e->clone, e->src->buffer, &options);
+	}
+	return 1;
 }
 
 static void
@@ -5874,6 +6026,7 @@ overviewclone(struct wlr_scene_buffer *buffer, int sx, int sy, void *data)
 
 	if (!buffer->buffer)
 		return;
+	oc->seen++;
 	width = buffer->dst_width > 0 ? buffer->dst_width
 			: buffer->src_box.width > 0 ? (int)round(buffer->src_box.width)
 			: buffer->buffer->width;
@@ -5937,6 +6090,8 @@ overviewclone(struct wlr_scene_buffer *buffer, int sx, int sy, void *data)
 	wlr_scene_node_set_position(&clone->node, vis.x, vis.y);
 	cloneblur(buffer, clone, oc->tree, dstw, dsth, corners);
 	oc->count++;
+	if (oc->client)
+		overviewcardadd(oc->client, buffer, clone, sx, sy);
 }
 
 static struct wlr_box
@@ -5993,8 +6148,10 @@ overviewwindowdraw(struct wlr_scene_tree *tree, Client *c,
 	struct wlr_scene_tree *content;
 	struct wlr_scene_rect *back;
 	OverviewClone oc;
+	struct wl_list *last;
+	OverviewCard *e;
 	float scale;
-	int enabled, radius;
+	int radius;
 
 	if (opacity <= 0.0f)
 		return;
@@ -6027,21 +6184,15 @@ overviewwindowdraw(struct wlr_scene_tree *tree, Client *c,
 		.x = box->x, .y = box->y,
 		.radius = -1,
 		.clip = *clip,
+		.client = c,
 	};
-	enabled = c->scene->node.enabled;
-	if (!enabled)
-		wlr_scene_node_set_enabled(&c->scene->node, 1);
+	last = overview_cards.prev;
 	/* a window cut by the monitor edge is cloned whole; the crop above is
 	 * only for what is drawn on screen */
-	if (c->scene_surface && (c->offscreen || !c->scene_surface->node.enabled))
-		wlr_scene_node_set_enabled(&c->scene_surface->node, 1);
-	wlr_scene_node_for_each_buffer(&c->scene->node, overviewclone, &oc);
-	if (c->scene_surface && c->offscreen)
-		wlr_scene_node_set_enabled(&c->scene_surface->node, 0);
-	else if (c->scene_surface && !enabled)
-		clientclip(c);
-	if (!enabled)
-		wlr_scene_node_set_enabled(&c->scene->node, 0);
+	clientforeachbuffer(c, overviewclone, &oc);
+	for (e = wl_container_of(last->next, e, link); &e->link != &overview_cards;
+			e = wl_container_of(e->link.next, e, link))
+		e->nlive = oc.seen;
 	if (oc.count && back)
 		wlr_scene_node_destroy(&back->node);
 }
@@ -8940,6 +9091,30 @@ layoutstatepath(char *buf, size_t size)
 	return 1;
 }
 
+/* path of a state file, creating the whole state dir on first use: a fresh
+ * account may not have ~/.local/state yet */
+static int
+statefile(char *path, size_t size, const char *name)
+{
+	static int made;
+	char dir[512], *q;
+
+	if (!layoutstatepath(dir, sizeof dir))
+		return 0;
+	if (!made) {
+		for (q = dir + 1; *q; q++) {
+			if (*q != '/')
+				continue;
+			*q = '\0';
+			mkdir(dir, 0700);
+			*q = '/';
+		}
+		made = !mkdir(dir, 0700) || errno == EEXIST;
+	}
+	snprintf(path, size, "%s/%s", dir, name);
+	return 1;
+}
+
 void
 loadlayoutstate(void)
 {
@@ -8965,22 +9140,11 @@ loadlayoutstate(void)
 void
 savelayoutstate(unsigned int lt)
 {
-	char path[600], dir[512];
+	char path[600];
 	FILE *f;
 
-	if (!remember_layout || !layoutstatepath(dir, sizeof dir))
+	if (!remember_layout || !statefile(path, sizeof path, "layout"))
 		return;
-	/* the parent of the state dir usually exists already; create both anyway */
-	{
-		char *slash = strrchr(dir, '/');
-		if (slash) {
-			*slash = '\0';
-			mkdir(dir, 0700);
-			*slash = '/';
-		}
-	}
-	mkdir(dir, 0700);
-	snprintf(path, sizeof path, "%s/layout", dir);
 	if (!(f = fopen(path, "w")))
 		return;
 	fprintf(f, "%s\n", layoutname(lt));
@@ -8992,21 +9156,11 @@ saveoverviewstate(int active)
 {
 	/* published so the shell can put a dock on screen while the overview is
 	 * up; no other compositor writes this, so the dock stays gluemac-only */
-	char path[600], dir[512];
+	char path[600];
 	FILE *f;
 
-	if (!layoutstatepath(dir, sizeof dir))
+	if (!statefile(path, sizeof path, "overview"))
 		return;
-	{
-		char *slash = strrchr(dir, '/');
-		if (slash) {
-			*slash = '\0';
-			mkdir(dir, 0700);
-			*slash = '/';
-		}
-	}
-	mkdir(dir, 0700);
-	snprintf(path, sizeof path, "%s/overview", dir);
 	if (!(f = fopen(path, "w")))
 		return;
 	fprintf(f, "%d\n", active ? 1 : 0);
@@ -9415,6 +9569,7 @@ setup(void)
 
 	/* status bar support: dwl-ipc (workspaces/tags) + foreign-toplevel (windows) */
 	wl_list_init(&ipc_outputs);
+	wl_list_init(&overview_cards);
 	wl_global_create(dpy, &zdwl_ipc_manager_v2_interface, 2, NULL, ipcmgrbind);
 	ftl_mgr = wlr_foreign_toplevel_manager_v1_create(dpy);
 
