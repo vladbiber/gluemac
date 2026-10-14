@@ -12,8 +12,9 @@ GLUEMACDEVCFLAGS = -g -Wpedantic -Wall -Wextra -Wdeclaration-after-statement \
 	-Wfloat-conversion
 
 # CFLAGS / LDFLAGS
-PKGS      = wayland-server xkbcommon libinput $(XLIBS)
-GLUEMACCFLAGS = `$(PKG_CONFIG) --cflags $(PKGS)` $(SCENEFX_INCS) $(WLR_INCS) $(GLUEMACCPPFLAGS) $(GLUEMACDEVCFLAGS) $(CFLAGS)
+PKGS      = wayland-server xkbcommon libinput pangocairo librsvg-2.0 libdrm $(XLIBS)
+LIBINPUT3FG = `$(PKG_CONFIG) --atleast-version=1.28 libinput && echo -DLIBINPUT_HAVE_3FG_DRAG=1`
+GLUEMACCFLAGS = $(LIBINPUT3FG) `$(PKG_CONFIG) --cflags $(PKGS)` $(SCENEFX_INCS) $(WLR_INCS) $(GLUEMACCPPFLAGS) $(GLUEMACDEVCFLAGS) $(CFLAGS)
 LDLIBS    = `$(PKG_CONFIG) --libs $(PKGS)` $(SCENEFX_LIBS) $(WLR_LIBS) -lm $(LIBS)
 # gluemac-msg is a plain Wayland client
 MSGCFLAGS = `$(PKG_CONFIG) --cflags wayland-client` -I. $(GLUEMACDEVCFLAGS) $(CFLAGS)
@@ -31,7 +32,7 @@ gluemac-msg: gluemac-msg.o dwl-ipc-unstable-v2-protocol.o wlr-output-power-manag
 gluemac-msg.o: gluemac-msg.c dwl-ipc-unstable-v2-client-protocol.h \
 	wlr-output-power-management-unstable-v1-client-protocol.h
 	$(CC) $(CPPFLAGS) $(MSGCFLAGS) -o $@ -c gluemac-msg.c
-gluemac.o: gluemac.c client.h config.h config.mk mac.h mac.c macgenie.c macmc.c cursor-shape-v1-protocol.h \
+gluemac.o: gluemac.c client.h config.h config.mk mac.h mac.c mactext.c macgenie.c macmc.c cursor-shape-v1-protocol.h \
 	dwl-ipc-unstable-v2-protocol.h \
 	pointer-constraints-unstable-v1-protocol.h wlr-layer-shell-unstable-v1-protocol.h \
 	wlr-output-power-management-unstable-v1-protocol.h xdg-shell-protocol.h
@@ -86,7 +87,7 @@ dist: clean
 	mkdir -p gluemac-$(VERSION)
 	cp -R .github docs LICENSE* Makefile CHANGELOG.md CONTRIBUTING.md \
 		README.md SECURITY.md install.sh flake.nix client.h config.def.h \
-		config.def.conf config.mk protocols gluemac.1 gluemac.c mac.h mac.c macgenie.c macmc.c gluemac-msg.c \
+		config.def.conf config.mk protocols gluemac.1 gluemac.c mac.h mac.c mactext.c macgenie.c macmc.c gluemac-msg.c \
 		util.c util.h gluemac.desktop gluemac-session gluemac-backlight gluemac-$(VERSION)
 	tar -caf gluemac-$(VERSION).tar.gz gluemac-$(VERSION)
 	rm -rf gluemac-$(VERSION)

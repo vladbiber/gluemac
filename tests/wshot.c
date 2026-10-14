@@ -8,6 +8,7 @@
 #include <wayland-client.h>
 #include "screencopy-protocol.h"
 
+static int bgr;
 static struct wl_shm *shm;
 static struct wl_output *output;
 static int want_output, seen_outputs;
@@ -35,6 +36,7 @@ static const struct wl_registry_listener reg_lis = { reg_global, reg_remove };
 static void fbuffer(void *d, struct zwlr_screencopy_frame_v1 *f,
 		uint32_t format, uint32_t width, uint32_t height, uint32_t stride)
 {
+	bgr = format == WL_SHM_FORMAT_ABGR8888 || format == WL_SHM_FORMAT_XBGR8888;
 	int fd = memfd_create("shot", 0);
 	struct wl_shm_pool *pool;
 	if (ftruncate(fd, (off_t)stride * height) < 0)
@@ -76,7 +78,8 @@ int main(int argc, char *argv[])
 	for (y = 0; y < bh; y++) {
 		unsigned char *row = (unsigned char *)bufdata + (size_t)y * bstride;
 		for (x = 0; x < bw; x++) {
-			unsigned char px[3] = { row[x * 4 + 2], row[x * 4 + 1], row[x * 4] };
+			unsigned char px[3] = { row[x * 4 + (bgr ? 0 : 2)], row[x * 4 + 1],
+					row[x * 4 + (bgr ? 2 : 0)] };
 			fwrite(px, 1, 3, out);
 		}
 	}

@@ -1,6 +1,9 @@
 /* macOS behaviour: stacking windows, dynamic spaces, app-wide actions */
 #include <strings.h>
 
+static int cfgbindcombo(char *combo, uint32_t *mods, xkb_keysym_t *sym);
+static int macisterm(Client *c);
+
 static int mac_stacking = 1;
 static int mac_cmd_as_ctrl = 1;
 static int mac_super_tap = 0;
@@ -8,6 +11,8 @@ static int mac_spaces = 1;
 static int mac_edge_tiling = 1;
 static int mac_genie = 1;
 static int mac_genie_duration = 520;
+static char mac_font[64] = "SF Pro Display,Inter,Noto Sans";
+static char mac_icon_theme[64] = "";
 static char mac_terminals[512] = "Alacritty alacritty foot footclient kitty "
 		"org.wezfurlong.wezterm com.mitchellh.ghostty st-glue xterm "
 		"org.gnome.Console org.gnome.Ptyxis konsole";
@@ -16,6 +21,10 @@ static struct {
 	Arg arg;
 	int armed;
 } mac_corner[4] = {{0}, {0}, {0}, {0}};
+static struct {
+	void (*func)(const Arg *);
+	Arg arg;
+} mac_pinch[2] = {{0}, {macshowdesktop, {0}}};
 
 static int mac_busy;
 static uint32_t mac_edges;
@@ -33,6 +42,8 @@ static struct {
 } mac_keys[8];
 
 static int mc_appexpose;
+/* the Spaces bar: names only until the pointer goes to the top, 0..1 */
+static float mc_bar, mc_bar_to;
 static char mc_app[128];
 static struct {
 	int active, idx, n;
@@ -739,11 +750,17 @@ macminimizeaction(const Arg *arg)
 	macminimize(focustop(selmon), MinMinimized);
 }
 
+static void macswitchapp(int what);
+
 static void
 machideapp(const Arg *arg)
 {
 	Client *sel = focustop(selmon), *c;
 
+	if (macsw.active && !arg->i) {
+		macswitchapp(1);
+		return;
+	}
 	if (!sel)
 		return;
 	wl_list_for_each(c, &clients, link)
@@ -758,6 +775,10 @@ macquitapp(const Arg *arg)
 	Client *sel = focustop(selmon), *c;
 	char app[128];
 
+	if (macsw.active) {
+		macswitchapp(0);
+		return;
+	}
 	if (!sel)
 		return;
 	snprintf(app, sizeof app, "%s", macappid(sel));
@@ -768,6 +789,158 @@ macquitapp(const Arg *arg)
 			client_send_close(c);
 		}
 	}
+}
+
+static void
+macshowall(const Arg *arg)
+{
+	Client *c;
+
+	wl_list_for_each(c, &clients, link)
+		if (c->minimized == MinHidden)
+			macunminimize(c);
+	if (selmon)
+		focusclient(focustop(selmon), 1);
+}
+
+static pid_t
+macpid(Client *c)
+{
+	pid_t pid = 0;
+
+#ifdef XWAYLAND
+	if (client_is_x11(c))
+		return c->surface.xwayland->pid;
+#endif
+	wl_client_get_credentials(c->surface.xdg->client->client, &pid, NULL, NULL);
+	return pid;
+}
+
+/* app actions by app id, for the dock and the Force Quit window; arg->v is
+ * "Q:id", "H:id" or "F:id" (quit, hide, force quit), an empty id the
+ * focused app */
+static void
+macappaction(const Arg *arg)
+{
+	const char *s = arg->v, *app;
+	Client *c, *sel;
+	pid_t pids[16];
+	int n = 0, i;
+	char what;
+
+	if (!s || strlen(s) < 2)
+		return;
+	what = s[0];
+	app = s + 2;
+	if (!*app) {
+		if (!(sel = focustop(selmon)))
+			return;
+		app = macappid(sel);
+	}
+	wl_list_for_each(c, &clients, link) {
+		if (!macmanaged(c) || strcmp(macappid(c), app))
+			continue;
+		if (what == 'H') {
+			if (!c->isfullscreen)
+				macminimize(c, MinHidden);
+		} else if (what == 'Q') {
+			if (VISIBLEON(c, c->mon))
+				clientcloseanim(c);
+			client_send_close(c);
+		} else if (what == 'F' && n < (int)LENGTH(pids)) {
+			pid_t p = macpid(c);
+			for (i = 0; i < n && pids[i] != p; i++);
+			if (i == n && p > 1 && p != getpid())
+				pids[n++] = p;
+		}
+	}
+	for (i = 0; i < n; i++)
+		kill(pids[i], SIGKILL);
+}
+
+/* a key combo typed into the focused window, for the menu bar: cmd is the
+ * Mac Cmd, so it arrives as Ctrl (Ctrl+Shift in a terminal) */
+static void
+mackey(const Arg *arg)
+{
+	struct wlr_keyboard *kb = &kb_group->wlr_group->keyboard;
+	struct wlr_keyboard_modifiers mods;
+	struct xkb_keymap *km = kb->keymap;
+	xkb_keycode_t k, code = 0;
+	xkb_keysym_t want;
+	const xkb_keysym_t *syms;
+	uint32_t m, t = now_ms();
+	char buf[96];
+	Client *c = focustop(selmon);
+	int lvl, n, pass, needshift = 0;
+
+	if (!arg->v || !c || !km)
+		return;
+	snprintf(buf, sizeof buf, "%s", (const char *)arg->v);
+	if (!cfgbindcombo(buf, &m, &want))
+		return;
+	/* the exact symbol first, so A comes out with Shift and a without */
+	for (pass = 0; pass < 2 && !code; pass++) {
+		xkb_keysym_t s = pass ? xkb_keysym_to_lower(want) : want;
+		for (k = xkb_keymap_min_keycode(km); !code && k <= xkb_keymap_max_keycode(km); k++) {
+			for (lvl = 0; lvl < 2 && !code; lvl++) {
+				n = xkb_keymap_key_get_syms_by_level(km, k, 0, lvl, &syms);
+				if (n > 0 && syms[0] == s) {
+					code = k;
+					needshift = lvl == 1;
+				}
+			}
+		}
+	}
+	if (!code)
+		return;
+	if (m & WLR_MODIFIER_LOGO)
+		m = (m & ~WLR_MODIFIER_LOGO) | WLR_MODIFIER_CTRL
+				| (macisterm(c) ? WLR_MODIFIER_SHIFT : 0);
+	if (needshift)
+		m |= WLR_MODIFIER_SHIFT;
+	macdropshellfocus();
+	if (seat->keyboard_state.focused_surface != client_surface(c))
+		focusclient(c, 1);
+	wlr_seat_set_keyboard(seat, kb);
+	mods = kb->modifiers;
+	mods.depressed = m;
+	wlr_seat_keyboard_notify_modifiers(seat, &mods);
+	wlr_seat_keyboard_notify_key(seat, t, code - 8, WL_KEYBOARD_KEY_STATE_PRESSED);
+	wlr_seat_keyboard_notify_key(seat, t + 1, code - 8, WL_KEYBOARD_KEY_STATE_RELEASED);
+	wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
+}
+
+/* wm:key:COMBO and the app actions with an id; the string is allocated */
+static int
+macstraction(const char *act, void (**func)(const Arg *), Arg *arg)
+{
+	static const struct { const char *pre; char what; } apps[] = {
+		{ "wm:quit_app:", 'Q' }, { "wm:hide_app:", 'H' }, { "wm:force_quit:", 'F' },
+	};
+	char *s;
+	size_t i, l;
+
+	if (!strncmp(act, "wm:key:", 7) && act[7]) {
+		*func = mackey;
+		arg->v = strdup(act + 7);
+		return 1;
+	}
+	if (!strcmp(act, "wm:force_quit"))
+		act = "wm:force_quit:";
+	for (i = 0; i < LENGTH(apps); i++) {
+		l = strlen(apps[i].pre);
+		if (strncmp(act, apps[i].pre, l))
+			continue;
+		s = ecalloc(1, strlen(act + l) + 3);
+		s[0] = apps[i].what;
+		s[1] = ':';
+		strcpy(s + 2, act + l);
+		*func = macappaction;
+		arg->v = s;
+		return 1;
+	}
+	return 0;
 }
 
 /* Cmd+`: the next window of the same app on this space */
@@ -831,6 +1004,7 @@ macmissioncontrol(const Arg *arg)
 	}
 	overviewset(0);
 	mc_appexpose = 0;
+	mc_bar = mc_bar_to = 0.0f;
 	overviewset(1);
 }
 
@@ -1016,7 +1190,12 @@ maccfg(const char *k, const char *v)
 		mac_genie = !strcmp(v, "genie");
 	else if (!strcmp(k, "genie_duration"))
 		mac_genie_duration = atoi(v);
-	else if (!strcmp(k, "terminals"))
+	else if (!strcmp(k, "gesture_pinch_in") || !strcmp(k, "gesture_pinch_out")) {
+		i = !strcmp(k, "gesture_pinch_out");
+		mac_pinch[i].func = NULL;
+		if (strcmp(v, "none") && !cfgaction(v, &mac_pinch[i].func, &mac_pinch[i].arg))
+			cfgerror("bad gesture action '%s'", v);
+	} else if (!strcmp(k, "terminals"))
 		snprintf(mac_terminals, sizeof mac_terminals, "%s", v);
 	else {
 		for (i = 0; i < 4; i++) {
@@ -1034,5 +1213,6 @@ maccfg(const char *k, const char *v)
 	return 1;
 }
 
+#include "mactext.c"
 #include "macgenie.c"
 #include "macmc.c"

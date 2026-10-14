@@ -2092,6 +2092,30 @@ gestureupdate(uint32_t fingers, double dx, double dy)
 		wsdrag.refused = 1;
 	}
 
+	if (mac_stacking) {
+		if (mcg.active) {
+			mcgupdate(dy);
+			return;
+		}
+		if (overview_swipe_triggered || fabs(overview_swipe_dy) < 12.0
+				|| fabs(overview_swipe_dy) <= fabs(overview_swipe_dx) * 1.2) {
+			if (overview_visible && !overview_swipe_triggered
+					&& fabs(overview_swipe_dx) >= 64.0
+					&& fabs(overview_swipe_dx) > fabs(overview_swipe_dy) * 1.2) {
+				overview_swipe_triggered = 1;
+				workspacestep(overview_swipe_dx < 0.0 ? 1 : -1);
+			}
+			return;
+		}
+		overview_swipe_triggered = 1;
+		/* open, only the way back does anything: it closes */
+		if (overview_active && mc_appexpose == (overview_swipe_dy > 0.0))
+			return;
+		if (mcgbegin(overview_active ? mc_appexpose : overview_swipe_dy > 0.0))
+			mcgupdate(overview_swipe_dy);
+		return;
+	}
+
 	if (fingers == 4) {
 		/* four fingers walk the workspaces and open the overview in every
 		 * layout, which is where drift keeps them since three fingers pan */
@@ -2189,6 +2213,7 @@ swipeendnotify(struct wl_listener *listener, void *data)
 
 	if (wsdrag.active)
 		wsdragend(event->cancelled, event->time_msec);
+	mcgend(event->cancelled, event->time_msec);
 	overview_swipe_active = 0;
 	overview_swipe_triggered = 0;
 	overview_swipe_dx = overview_swipe_dy = 0.0;
@@ -2222,7 +2247,21 @@ pinchupdatenotify(struct wl_listener *listener, void *data)
 		 * fingers drift apart a little, so the movement is fed to the swipe
 		 * handler instead of the zoom - otherwise the gesture would either
 		 * do nothing or zoom by accident */
-		if (event->fingers >= 4 && !drift_pinch_done) {
+		if (event->fingers >= 4 && !drift_pinch_done && mac_stacking) {
+			/* thumb and three fingers: pinch for Launchpad, spread to
+			 * show the desktop */
+			if (!wsdrag.active && !mcg.active && (event->scale <= 0.7
+					|| event->scale >= 1.35)) {
+				int in = event->scale < 1.0;
+				drift_pinch_done = 1;
+				overview_swipe_triggered = 1;
+				wsdrag.refused = 1;
+				if (mac_pinch[!in].func)
+					mac_pinch[!in].func(&mac_pinch[!in].arg);
+			}
+			if (drift_pinch_done)
+				return;
+		} else if (event->fingers >= 4 && !drift_pinch_done) {
 			if (event->scale <= 0.75) {
 				drift_pinch_done = 1;
 				overviewset(1);
@@ -2249,6 +2288,7 @@ pinchendnotify(struct wl_listener *listener, void *data)
 
 	if (wsdrag.active)
 		wsdragend(event->cancelled, event->time_msec);
+	mcgend(event->cancelled, event->time_msec);
 	drift_pinch_done = 0;
 	overview_swipe_active = 0;
 	overview_swipe_triggered = 0;
@@ -4981,13 +5021,18 @@ createnotify(struct wl_listener *listener, void *data)
 	LISTEN(&toplevel->events.request_minimize, &c->req_minimize, macrequestminimize);
 }
 
-void
-createpointer(struct wlr_pointer *pointer)
-{
-	struct libinput_device *device;
-	if (wlr_input_device_is_libinput(&pointer->base)
-			&& (device = wlr_libinput_get_device_handle(&pointer->base))) {
+typedef struct {
+	struct wlr_pointer *pointer;
+	struct wl_listener destroy;
+	struct wl_list link;
+} Pointer;
 
+static struct wl_list pointers = {&pointers, &pointers};
+
+static void
+pointerconfig(struct libinput_device *device)
+{
+	{
 		if (libinput_device_config_tap_get_finger_count(device)) {
 			libinput_device_config_tap_set_enabled(device, tap_to_click);
 			libinput_device_config_tap_set_drag_enabled(device, tap_and_drag);
@@ -5020,6 +5065,48 @@ createpointer(struct wlr_pointer *pointer)
 			libinput_device_config_accel_set_profile(device, accel_profile);
 			libinput_device_config_accel_set_speed(device, accel_speed);
 		}
+#if LIBINPUT_HAVE_3FG_DRAG
+		if (libinput_device_config_3fg_drag_get_finger_count(device) >= 3)
+			libinput_device_config_3fg_drag_set_enabled(device, three_finger_drag
+					? LIBINPUT_CONFIG_3FG_DRAG_ENABLED_3FG
+					: LIBINPUT_CONFIG_3FG_DRAG_DISABLED);
+#endif
+	}
+}
+
+static void
+pointerdestroy(struct wl_listener *listener, void *data)
+{
+	Pointer *p = wl_container_of(listener, p, destroy);
+
+	wl_list_remove(&p->destroy.link);
+	wl_list_remove(&p->link);
+	free(p);
+}
+
+/* touchpad settings from the config file, again after a reload */
+static void
+pointersreconfig(void)
+{
+	Pointer *p;
+
+	wl_list_for_each(p, &pointers, link)
+		pointerconfig(wlr_libinput_get_device_handle(&p->pointer->base));
+}
+
+void
+createpointer(struct wlr_pointer *pointer)
+{
+	struct libinput_device *device;
+	Pointer *p;
+
+	if (wlr_input_device_is_libinput(&pointer->base)
+			&& (device = wlr_libinput_get_device_handle(&pointer->base))) {
+		pointerconfig(device);
+		p = ecalloc(1, sizeof *p);
+		p->pointer = pointer;
+		LISTEN(&pointer->base.events.destroy, &p->destroy, pointerdestroy);
+		wl_list_insert(&pointers, &p->link);
 	}
 
 	wlr_cursor_attach_input_device(cursor, &pointer->base);
@@ -5681,6 +5768,39 @@ ipcquit(struct wl_client *client, struct wl_resource *resource)
 	quit(NULL);
 }
 
+/* touchpad gestures over IPC for the headless tests, only when
+ * GLUEMAC_TEST_GESTURES is set: swipe:begin:N, swipe:update:N:DX:DY,
+ * swipe:end, pinch:begin:N, pinch:update:N:SCALE:DX:DY, pinch:end */
+static void
+testgesture(const char *g)
+{
+	unsigned int n;
+	double dx, dy, sc;
+	uint32_t t = now_ms();
+
+	if (sscanf(g, "swipe:begin:%u", &n) == 1) {
+		struct wlr_pointer_swipe_begin_event e = {.time_msec = t, .fingers = n};
+		swipebeginnotify(NULL, &e);
+	} else if (sscanf(g, "swipe:update:%u:%lf:%lf", &n, &dx, &dy) == 3) {
+		struct wlr_pointer_swipe_update_event e = {.time_msec = t, .fingers = n,
+				.dx = dx, .dy = dy};
+		swipeupdatenotify(NULL, &e);
+	} else if (!strcmp(g, "swipe:end")) {
+		struct wlr_pointer_swipe_end_event e = {.time_msec = t};
+		swipeendnotify(NULL, &e);
+	} else if (sscanf(g, "pinch:begin:%u", &n) == 1) {
+		struct wlr_pointer_pinch_begin_event e = {.time_msec = t, .fingers = n};
+		pinchbeginnotify(NULL, &e);
+	} else if (sscanf(g, "pinch:update:%u:%lf:%lf:%lf", &n, &sc, &dx, &dy) == 4) {
+		struct wlr_pointer_pinch_update_event e = {.time_msec = t, .fingers = n,
+				.scale = sc, .dx = dx, .dy = dy};
+		pinchupdatenotify(NULL, &e);
+	} else if (!strcmp(g, "pinch:end")) {
+		struct wlr_pointer_pinch_end_event e = {.time_msec = t};
+		pinchendnotify(NULL, &e);
+	}
+}
+
 static void
 ipcdispatch(struct wl_client *client, struct wl_resource *resource,
 		const char *dispatch, const char *arg1, const char *arg2,
@@ -5692,12 +5812,18 @@ ipcdispatch(struct wl_client *client, struct wl_resource *resource,
 	void (*func)(const Arg *) = NULL;
 	Arg arg = {0};
 
+	if (dispatch && !strncmp(dispatch, "test:", 5) && getenv("GLUEMAC_TEST_GESTURES")) {
+		testgesture(dispatch + 5);
+		return;
+	}
 	if (!dispatch || strncmp(dispatch, "wm:", 3) || !cfgaction(dispatch, &func, &arg)
 			|| !func)
 		return;
 	if (io && io->mon)
 		selmon = io->mon;
 	func(&arg);
+	if (func == mackey || func == macappaction)
+		free((void *)arg.v);
 }
 
 static const struct zdwl_ipc_output_v2_interface ipc_output_impl = {
@@ -7902,8 +8028,11 @@ rendermon(struct wl_listener *listener, void *data)
 	/* The overview clones the live buffers, so the camera zoom has to be on
 	 * them before anything is built from them this frame. */
 	driftapply(m);
-	if (!skipframe)
+	if (!skipframe) {
 		animpending |= wsdragframe(m);
+		animpending |= mcgframe(m);
+		animpending |= mcbarframe(m);
+	}
 
 	if (overview_visible && overview_dirty && !skipframe) {
 		overview_dirty = 0;
@@ -8908,6 +9037,7 @@ cfgaction(const char *act, void (**func)(const Arg *), Arg *arg)
 		{ "wm:hide_app",              machideapp,           {.i = 0} },
 		{ "wm:hide_others",           machideapp,           {.i = 1} },
 		{ "wm:quit_app",              macquitapp,           {0} },
+		{ "wm:show_all",              macshowall,           {0} },
 		{ "wm:minimize",              macminimizeaction,    {0} },
 		{ "wm:zoom",                  maczoomaction,        {0} },
 		{ "wm:space_prev",            wsstep,               {.i = -1} },
@@ -8966,7 +9096,7 @@ cfgaction(const char *act, void (**func)(const Arg *), Arg *arg)
 		arg->ui = n - 1;
 		return 1;
 	}
-	return 0;
+	return macstraction(act, func, arg);
 }
 
 static void
@@ -9332,6 +9462,18 @@ readconfig(void)
 			drift_zoom_max = MAX(1.0f, strtof(v, NULL));
 		} else if (!strcmp(k, "drift_zoom_step")) {
 			drift_zoom_step = MAX(1.01f, strtof(v, NULL));
+		} else if (!strcmp(k, "natural_scrolling")) {
+			natural_scrolling = !strcmp(v, "true") || !strcmp(v, "1");
+		} else if (!strcmp(k, "tap_to_click")) {
+			tap_to_click = !strcmp(v, "true") || !strcmp(v, "1");
+		} else if (!strcmp(k, "three_finger_drag")) {
+			three_finger_drag = !strcmp(v, "true") || !strcmp(v, "1");
+		} else if (!strcmp(k, "secondary_click")) {
+			click_method = !strcmp(v, "corner")
+					? LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS
+					: LIBINPUT_CONFIG_CLICK_METHOD_CLICKFINGER;
+		} else if (!strcmp(k, "pointer_speed")) {
+			accel_speed = MAX(-1.0, MIN(1.0, strtod(v, NULL)));
 		} else if (!strcmp(k, "swipe_distance")) {
 			swipe_distance = MAX(0, atoi(v));
 		} else if (!strcmp(k, "drift_pan_speed")) {
@@ -9747,6 +9889,7 @@ reloadconfig(const Arg *arg)
 	}
 	wlr_keyboard_set_repeat_info(&kb_group->wlr_group->keyboard,
 			repeat_rate, repeat_delay);
+	pointersreconfig();
 
 	wl_list_for_each(c, &clients, link) {
 		if (!c->isfullscreen)
