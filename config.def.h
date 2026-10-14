@@ -8,14 +8,14 @@
 static const int sloppyfocus               = 1;  /* focus follows mouse */
 static int warpcursor                      = 1;  /* warp cursor to focused window on keyboard focus, like nvwm */
 static const int bypass_surface_visibility = 0;  /* 1 means idle inhibitors will disable idle tracking even if it's surface isn't visible  */
-static unsigned int borderpx               = 2;  /* border pixel of windows */
+static unsigned int borderpx               = 0;  /* border pixel of windows */
 static int gappx                           = 8;  /* gap around tiled windows */
 static float rootcolor[]                   = COLOR(0x000000ff);
 static float bordercolor[]                 = COLOR(0x2f3549ff);
 static float focuscolor[]                  = COLOR(0x7aa2f7ff);
 static float normalmodecolor[]             = COLOR(0xe0af68ff); /* focused border while in normal mode */
 static int unfocused_borders                = 0;  /* 1 keeps the dim border on unfocused windows */
-static int corner_radius                   = 8;  /* rounded corner radius, 0 disables */
+static int corner_radius                   = 10;  /* rounded corner radius, 0 disables */
 static int blurenabled                     = 0;  /* backdrop blur behind transparent windows */
 static int blur_passes                     = 3;
 static int blur_radius                     = 5;
@@ -36,7 +36,7 @@ static float animation_curve_open[4]       = {0.16f, 1.0f, 0.3f, 1.0f};  /* ease
 static float animation_curve_close[4]      = {0.42f, 0.0f, 0.6f, 1.0f};  /* ease in out */
 static float scroll_colfrac                = 0.5f; /* default column width in the niri-style scroll layout */
 static int default_layout                  = LtBSP; /* layout new monitors start in: LtBSP, LtScroll or LtDrift */
-static int remember_layout                 = 1;     /* reopen in the layout the last session ended in */
+static int remember_layout                 = 0;     /* reopen in the layout the last session ended in */
 static int start_in_overview               = 0;     /* open the session on the overview */
 /* drift layout - driftwm-style infinite canvas */
 static int drift_snap                      = 24;    /* edge snapping distance, in canvas pixels */
@@ -162,65 +162,63 @@ static const enum libinput_config_tap_button_map button_map = LIBINPUT_CONFIG_TA
 static const char *termcmd[] = { "alacritty", NULL };
 static const char *menucmd[] = { "rofi", "-show", "drun", NULL };
 
+/* Cmd is Super. Apps get Cmd as Ctrl, so Cmd+C, Cmd+V, Cmd+W, Cmd+T and the
+ * rest are theirs; only the keys below belong to the desktop, as on a Mac. */
+#define CMD  MODKEY
+#define CTRL WLR_MODIFIER_CTRL
+#define OPT  WLR_MODIFIER_ALT
+#define SHIFT WLR_MODIFIER_SHIFT
+#define SPACEKEYS(KEY,WS) \
+	{ CTRL,     KEY, viewws,         {.ui = (WS)} }, \
+	{ CTRL|CMD, KEY, movetowsfollow, {.ui = (WS)} }
+#define LOCKCMD SHCMD("command -v hyprlock >/dev/null && exec hyprlock; exec swaylock -f")
 static const Key keys[] = {
-	/* modifier                  key                 function        argument */
-	{ MODKEY,                    XKB_KEY_q,          spawn,          {.v = termcmd} },
-	{ MODKEY,                    XKB_KEY_Return,     spawn,          {.v = termcmd} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Q,          quit,           {0} },
-	{ MODKEY,                    XKB_KEY_space,      spawn,          {.v = menucmd} },
-	{ 0,                         XKB_KEY_Print,      spawn,          SHOTFULL },
-	{ WLR_MODIFIER_SHIFT,        XKB_KEY_Print,      spawn,          SHOTAREA },
-	{ WLR_MODIFIER_CTRL,         XKB_KEY_Print,      spawn,          SHOTFULLCLIP },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_S,          spawn,          SHOTAREACLIP },
-	{ MODKEY,                    XKB_KEY_c,          killclient,     {0} },
-	{ MODKEY,                    XKB_KEY_Escape,     entermode,      {.i = ModeNormal} },
-	{ MODKEY,                    XKB_KEY_Tab,        focusnext,      {0} },
-	{ MODKEY,                    XKB_KEY_f,          togglefakefullscreen, {0} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_f,          togglefullscreen, {0} },
-	{ MODKEY,                    XKB_KEY_v,          togglefloating, {0} },
-	{ MODKEY,                    XKB_KEY_m,          quit,           {0} },
-	{ MODKEY,                    XKB_KEY_n,          togglelayout,   {0} },
-	{ MODKEY,                    XKB_KEY_comma,      consumewin,     {0} },
-	{ MODKEY,                    XKB_KEY_period,     expelwin,       {0} },
-	{ MODKEY,                    XKB_KEY_b,          toggledecor,    {0} },
-	{ MODKEY,                    XKB_KEY_o,          toggleopacity,  {0} },
-	{ MODKEY,                    XKB_KEY_Left,       focusdir,       {.i = DirLeft} },
-	{ MODKEY,                    XKB_KEY_Right,      focusdir,       {.i = DirRight} },
-	{ MODKEY,                    XKB_KEY_Up,         focusdir,       {.i = DirUp} },
-	{ MODKEY,                    XKB_KEY_Down,       focusdir,       {.i = DirDown} },
-	{ MODKEY,                    XKB_KEY_h,          focusdir,       {.i = DirLeft} },
-	{ MODKEY,                    XKB_KEY_l,          focusdir,       {.i = DirRight} },
-	{ MODKEY,                    XKB_KEY_k,          focusdir,       {.i = DirUp} },
-	{ MODKEY,                    XKB_KEY_j,          focusdir,       {.i = DirDown} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Left,       swapdir,        {.i = DirLeft} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Right,      swapdir,        {.i = DirRight} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Up,         swapdir,        {.i = DirUp} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Down,       swapdir,        {.i = DirDown} },
-	/* pans the camera in the drift layout, swaps windows everywhere else */
-	{ MODKEY|WLR_MODIFIER_CTRL,  XKB_KEY_Left,       movedir,        {.i = DirLeft} },
-	{ MODKEY|WLR_MODIFIER_CTRL,  XKB_KEY_Right,      movedir,        {.i = DirRight} },
-	{ MODKEY|WLR_MODIFIER_CTRL,  XKB_KEY_Up,         movedir,        {.i = DirUp} },
-	{ MODKEY|WLR_MODIFIER_CTRL,  XKB_KEY_Down,       movedir,        {.i = DirDown} },
-	{ MODKEY|WLR_MODIFIER_ALT,   XKB_KEY_Left,       driftpankey,    {.i = DirLeft} },
-	{ MODKEY|WLR_MODIFIER_ALT,   XKB_KEY_Right,      driftpankey,    {.i = DirRight} },
-	{ MODKEY|WLR_MODIFIER_ALT,   XKB_KEY_Up,         driftpankey,    {.i = DirUp} },
-	{ MODKEY|WLR_MODIFIER_ALT,   XKB_KEY_Down,       driftpankey,    {.i = DirDown} },
-	{ MODKEY,                    XKB_KEY_w,          driftfit,       {0} },
-	{ MODKEY,                    XKB_KEY_plus,       driftzoomkey,   {.f = +1.0f} },
-	{ MODKEY,                    XKB_KEY_equal,      driftzoomkey,   {.f = +1.0f} },
-	{ MODKEY,                    XKB_KEY_minus,      driftzoomkey,   {.f = -1.0f} },
-	{ MODKEY,                    XKB_KEY_0,          driftzoomkey,   {.f = 0.0f} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_h,          swapdir,        {.i = DirLeft} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_l,          swapdir,        {.i = DirRight} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_k,          swapdir,        {.i = DirUp} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_j,          swapdir,        {.i = DirDown} },
-	{ MODKEY,                    XKB_KEY_Page_Up,    wsstep,         {.i = -1} },
-	{ MODKEY,                    XKB_KEY_Page_Down,  wsstep,         {.i = +1} },
-	{ MODKEY|WLR_MODIFIER_CTRL,  XKB_KEY_Page_Up,    movewsstep,     {.i = -1} },
-	{ MODKEY|WLR_MODIFIER_CTRL,  XKB_KEY_Page_Down,  movewsstep,     {.i = +1} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_r,          reloadconfig,   {0} },
-	/* Media keys, and the same actions on the function row for keyboards
-	 * that have no media keys or hide them behind Fn. */
+	/* modifier         key                    function           argument */
+	{ CMD,              XKB_KEY_space,         spawn,             {.v = menucmd} },
+	{ CMD,              XKB_KEY_Tab,           macswitch,         {.i = +1} },
+	{ CMD|SHIFT,        XKB_KEY_ISO_Left_Tab,  macswitch,         {.i = -1} },
+	{ CMD|SHIFT,        XKB_KEY_Tab,           macswitch,         {.i = -1} },
+	{ CMD,              XKB_KEY_grave,         macappnext,        {0} },
+	{ CMD,              XKB_KEY_q,             macquitapp,        {0} },
+	{ CMD,              XKB_KEY_h,             machideapp,        {.i = 0} },
+	{ CMD|OPT,          XKB_KEY_h,             machideapp,        {.i = 1} },
+	{ CMD,              XKB_KEY_m,             macminimizeaction, {0} },
+	{ CTRL|CMD,         XKB_KEY_f,             togglefullscreen,  {0} },
+	{ CTRL|CMD,         XKB_KEY_q,             spawn,             LOCKCMD },
+	{ CMD|SHIFT,        XKB_KEY_Q,             quit,              {0} },
+	{ CTRL,             XKB_KEY_Left,          wsstep,            {.i = -1} },
+	{ CTRL,             XKB_KEY_Right,         wsstep,            {.i = +1} },
+	{ CTRL,             XKB_KEY_Up,            macmissioncontrol, {0} },
+	{ CTRL,             XKB_KEY_Down,          macappexpose,      {0} },
+	{ 0,                XKB_KEY_XF86LaunchA,   macmissioncontrol, {0} },
+	{ 0,                XKB_KEY_F3,            macmissioncontrol, {0} },
+	{ CMD,              XKB_KEY_F3,            macshowdesktop,    {0} },
+	{ 0,                XKB_KEY_F11,           macshowdesktop,    {0} },
+	{ 0,                XKB_KEY_XF86LaunchB,   spawn,             {.v = menucmd} },
+	/* window tiling, Fn+Ctrl+arrows on a Mac */
+	{ CTRL|OPT,         XKB_KEY_Left,          mactile,           {.i = TileLeft} },
+	{ CTRL|OPT,         XKB_KEY_Right,         mactile,           {.i = TileRight} },
+	{ CTRL|OPT,         XKB_KEY_Up,            mactile,           {.i = TileTop} },
+	{ CTRL|OPT,         XKB_KEY_Down,          mactile,           {.i = TileBottom} },
+	{ CTRL|OPT,         XKB_KEY_Return,        mactile,           {.i = TileFill} },
+	{ CTRL|OPT,         XKB_KEY_f,             mactile,           {.i = TileFill} },
+	{ CTRL|OPT,         XKB_KEY_c,             mactile,           {.i = TileCenter} },
+	{ CTRL|OPT,         XKB_KEY_r,             mactile,           {.i = TileRestore} },
+	{ CTRL|OPT,         XKB_KEY_u,             mactile,           {.i = TileTL} },
+	{ CTRL|OPT,         XKB_KEY_i,             mactile,           {.i = TileTR} },
+	{ CTRL|OPT,         XKB_KEY_j,             mactile,           {.i = TileBL} },
+	{ CTRL|OPT,         XKB_KEY_k,             mactile,           {.i = TileBR} },
+	/* screenshots: Cmd+Shift+3 the screen, 4 an area, add Ctrl to copy */
+	{ CMD|SHIFT,        XKB_KEY_numbersign,    spawn,             SHOTFULL },
+	{ CMD|SHIFT,        XKB_KEY_dollar,        spawn,             SHOTAREA },
+	{ CMD|SHIFT,        XKB_KEY_percent,       spawn,             SHOTAREA },
+	{ CMD|SHIFT|CTRL,   XKB_KEY_numbersign,    spawn,             SHOTFULLCLIP },
+	{ CMD|SHIFT|CTRL,   XKB_KEY_dollar,        spawn,             SHOTAREACLIP },
+	{ 0,                XKB_KEY_Print,         spawn,             SHOTFULL },
+	{ SHIFT,            XKB_KEY_Print,         spawn,             SHOTAREA },
+	{ CTRL,             XKB_KEY_Print,         spawn,             SHOTFULLCLIP },
+	{ CTRL|OPT|CMD,     XKB_KEY_r,             reloadconfig,      {0} },
+	{ CTRL|OPT|CMD,     XKB_KEY_t,             spawn,             {.v = termcmd} },
 	{ 0, XKB_KEY_XF86AudioRaiseVolume,  spawn, VOLUP },
 	{ 0, XKB_KEY_XF86AudioLowerVolume,  spawn, VOLDOWN },
 	{ 0, XKB_KEY_XF86AudioMute,         spawn, VOLMUTE },
@@ -232,26 +230,15 @@ static const Key keys[] = {
 	{ 0, XKB_KEY_XF86AudioPrev,         spawn, SHCMD("playerctl previous") },
 	{ 0, XKB_KEY_XF86MonBrightnessUp,   spawn, BRTUP },
 	{ 0, XKB_KEY_XF86MonBrightnessDown, spawn, BRTDOWN },
-	{ MODKEY,                    XKB_KEY_F1, spawn, SHCMD("playerctl play-pause") },
-	{ MODKEY,                    XKB_KEY_F2, spawn, SHCMD("playerctl previous") },
-	{ MODKEY,                    XKB_KEY_F3, spawn, SHCMD("playerctl next") },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_F2, spawn, SHCMD("playerctl position 10-") },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_F3, spawn, SHCMD("playerctl position 10+") },
-	{ MODKEY,                    XKB_KEY_F4, spawn, VOLMUTE },
-	{ MODKEY,                    XKB_KEY_F5, spawn, VOLDOWN },
-	{ MODKEY,                    XKB_KEY_F6, spawn, VOLUP },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_F4, spawn, MICMUTE },
-	{ MODKEY,                    XKB_KEY_F7, spawn, BRTDOWN },
-	{ MODKEY,                    XKB_KEY_F8, spawn, BRTUP },
-	WSKEYS(XKB_KEY_1, 0),
-	WSKEYS(XKB_KEY_2, 1),
-	WSKEYS(XKB_KEY_3, 2),
-	WSKEYS(XKB_KEY_4, 3),
-	WSKEYS(XKB_KEY_5, 4),
-	WSKEYS(XKB_KEY_6, 5),
-	WSKEYS(XKB_KEY_7, 6),
-	WSKEYS(XKB_KEY_8, 7),
-	WSKEYS(XKB_KEY_9, 8),
+	SPACEKEYS(XKB_KEY_1, 0),
+	SPACEKEYS(XKB_KEY_2, 1),
+	SPACEKEYS(XKB_KEY_3, 2),
+	SPACEKEYS(XKB_KEY_4, 3),
+	SPACEKEYS(XKB_KEY_5, 4),
+	SPACEKEYS(XKB_KEY_6, 5),
+	SPACEKEYS(XKB_KEY_7, 6),
+	SPACEKEYS(XKB_KEY_8, 7),
+	SPACEKEYS(XKB_KEY_9, 8),
 
 	/* Ctrl-Alt-Backspace and Ctrl-Alt-Fx used to be handled by X server */
 	{ WLR_MODIFIER_CTRL|WLR_MODIFIER_ALT,XKB_KEY_Terminate_Server, quit, {0} },
@@ -289,17 +276,9 @@ static const Key normalkeys[] = {
 	{ 0, XKB_KEY_F8,    spawn, BRTUP },
 };
 
+/* Ctrl+Cmd drags a window from anywhere in it, right button resizes;
+ * a plain Cmd+click stays the app's (it is Ctrl+click to it) */
 static const Button buttons[] = {
-	{ MODKEY, BTN_LEFT,   moveresize,     {.ui = CurMove} },
-	{ MODKEY, BTN_MIDDLE, togglefloating, {0} },
-	{ MODKEY, BTN_RIGHT,  moveresize,     {.ui = CurResize} },
-	/* drag the canvas itself around in the drift layout; in the other
-	 * layouts there is no camera, so the click goes to the application */
-	{ MODKEY|WLR_MODIFIER_SHIFT, BTN_LEFT, driftpan, {0} },
-	/* driftwm keeps window dragging on Alt; these only bind in the drift
-	 * layout, so Alt+click keeps working inside applications elsewhere.
-	 * Shift takes the whole snapped cluster along. */
-	{ WLR_MODIFIER_ALT, BTN_LEFT,  moveresize, {.ui = CurMove} },
-	{ WLR_MODIFIER_ALT, BTN_RIGHT, moveresize, {.ui = CurResize} },
-	{ WLR_MODIFIER_ALT|WLR_MODIFIER_SHIFT, BTN_LEFT, moveresize, {.ui = CurDriftMove} },
+	{ MODKEY|WLR_MODIFIER_CTRL, BTN_LEFT,  moveresize, {.ui = CurMove} },
+	{ MODKEY|WLR_MODIFIER_CTRL, BTN_RIGHT, moveresize, {.ui = CurResize} },
 };

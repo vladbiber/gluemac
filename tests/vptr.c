@@ -1,3 +1,4 @@
+#include <time.h>
 /* vptr - virtual-pointer injector for driving gluemac in headless tests.
  * Usage: vptr <cmd>...
  *   abs X Y            move to fraction of the layout (0.0–1.0)
@@ -34,7 +35,8 @@ int main(int argc, char *argv[])
 	struct wl_display *dpy = wl_display_connect(NULL);
 	struct wl_registry *reg;
 	struct zwlr_virtual_pointer_v1 *p;
-	uint32_t t = 100;
+	uint32_t t;
+	struct timespec ts;
 	int i;
 
 	if (!dpy) { fprintf(stderr, "no wayland display\n"); return 1; }
@@ -43,6 +45,8 @@ int main(int argc, char *argv[])
 	wl_display_roundtrip(dpy);
 	if (!seat || !vpm) { fprintf(stderr, "missing seat/vpm\n"); return 1; }
 	p = zwlr_virtual_pointer_manager_v1_create_virtual_pointer(vpm, seat);
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	t = (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 	wl_display_roundtrip(dpy);
 
 	for (i = 1; i < argc; i++) {

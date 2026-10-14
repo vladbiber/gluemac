@@ -38,6 +38,8 @@ static const struct keymapent keys[] = {
 	{"Left",105},{"Right",106},{"Up",103},{"Down",108},
 	{"PgUp",104},{"PgDn",109},
 	{"Print",99},
+	{"grave",41},{"space",57},{"a",30},{"d",32},{"e",18},{"u",22},{"x",45},
+	{"z",44},{"y",21},{"p",25},{"BackSpace",14},
 };
 
 static int keycode(const char *n)
@@ -49,6 +51,8 @@ static int keycode(const char *n)
 	fprintf(stderr, "unknown key %s\n", n);
 	exit(1);
 }
+
+static uint32_t held;
 
 int main(int argc, char *argv[])
 {
@@ -116,12 +120,14 @@ int main(int argc, char *argv[])
 			continue;
 		}
 		if (!strcmp(argv[i], "M-down")) {
+			held = 64;
 			zwp_virtual_keyboard_v1_key(kb, t++, 125, WL_KEYBOARD_KEY_STATE_PRESSED);
 			zwp_virtual_keyboard_v1_modifiers(kb, 64, 0, 0, 0);
 			wl_display_roundtrip(dpy);
 			continue;
 		}
 		if (!strcmp(argv[i], "M-up")) {
+			held = 0;
 			zwp_virtual_keyboard_v1_key(kb, t++, 125, WL_KEYBOARD_KEY_STATE_RELEASED);
 			zwp_virtual_keyboard_v1_modifiers(kb, 0, 0, 0, 0);
 			wl_display_roundtrip(dpy);
@@ -146,7 +152,7 @@ int main(int argc, char *argv[])
 		code = keycode(last);
 		{
 			/* the compositor only sees modifier state we announce */
-			uint32_t depressed = 0;
+			uint32_t depressed = held;
 			for (m = 0; m < nmods; m++)
 				depressed |= mods[m] == 125 ? 64 : mods[m] == 42 ? 1
 						: mods[m] == 56 ? 8 : 4;
@@ -157,7 +163,7 @@ int main(int argc, char *argv[])
 			zwp_virtual_keyboard_v1_key(kb, t++, code, WL_KEYBOARD_KEY_STATE_RELEASED);
 			for (m = nmods - 1; m >= 0; m--)
 				zwp_virtual_keyboard_v1_key(kb, t++, mods[m], WL_KEYBOARD_KEY_STATE_RELEASED);
-			zwp_virtual_keyboard_v1_modifiers(kb, 0, 0, 0, 0);
+			zwp_virtual_keyboard_v1_modifiers(kb, held, 0, 0, 0);
 		}
 		wl_display_roundtrip(dpy);
 		usleep(150000);

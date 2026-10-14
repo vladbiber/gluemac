@@ -81,10 +81,10 @@
 #define MAX(A, B)               ((A) > (B) ? (A) : (B))
 #define MIN(A, B)               ((A) < (B) ? (A) : (B))
 #define CLEANMASK(mask)         (mask & ~WLR_MODIFIER_CAPS)
-#define VISIBLEON(C, M)         ((M) && (C)->mon == (M) && (C)->ws == (M)->ws)
+#define VISIBLEON(C, M)         ((M) && (C)->mon == (M) && (C)->ws == (M)->ws && !(C)->minimized)
 #define LENGTH(X)               (sizeof X / sizeof X[0])
 #define END(A)                  ((A) + LENGTH(A))
-#define NUMWS                   9
+#define NUMWS                   16
 #define LISTEN(E, L, H)         wl_signal_add((E), ((L)->notify = (H), (L)))
 #define LISTEN_STATIC(E, H)     do { struct wl_listener *_l = ecalloc(1, sizeof(*_l)); _l->notify = (H); wl_signal_add((E), _l); } while (0)
 #define SCROLLLT(M)             ((M) && (M)->lt == LtScroll)
@@ -96,7 +96,7 @@
 /* enums */
 enum { CurNormal, CurPressed, CurMove, CurResize,
        CurDragTile, CurResizeCol, CurDriftMove, CurDriftResize,
-       CurDriftPan, CurBSPMove, CurBSPResize }; /* cursor */
+       CurDriftPan, CurBSPMove, CurBSPResize, CurMacResize }; /* cursor */
 enum { LtBSP, LtScroll, LtDrift, LtLast }; /* per-monitor layouts */
 enum { XDGShell, LayerShell, X11 }; /* client types */
 /* LyrOverview sits above the windows but below LyrTop, so the bar stays
@@ -178,6 +178,14 @@ struct Client {
 	struct wl_listener destroy_decoration;
 	struct wl_listener ftl_activate;
 	struct wl_listener ftl_close;
+	struct wl_listener ftl_minimize;
+	struct wl_listener req_move;
+	struct wl_listener req_resize;
+	struct wl_listener req_minimize;
+	int minimized; /* MinMinimized, MinHidden (Cmd+H) or MinDesktop */
+	int fsspace;   /* fullscreen on a space of its own */
+	int tiled, zoomed;
+	struct wlr_box restore; /* size before it was tiled or zoomed */
 #ifdef XWAYLAND
 	struct wl_listener activate;
 	struct wl_listener associate;
@@ -299,6 +307,7 @@ struct Monitor {
 	struct wlr_box w; /* window area, layout-relative */
 	struct wl_list layers[4]; /* LayerSurface.link */
 	unsigned int ws; /* current workspace */
+	unsigned int nspaces;
 	Node *tree[NUMWS]; /* BSP tree per workspace */
 	unsigned int lt; /* LtBSP, LtScroll (niri-style) or LtDrift (infinite canvas) */
 	struct wl_list cols[NUMWS]; /* Column.link per workspace (scroll layout) */
@@ -831,11 +840,15 @@ static struct wl_listener xwayland_ready = {.notify = xwaylandready};
 static struct wlr_xwayland *xwayland;
 #endif
 
+#include "mac.h"
+
 /* configuration, allows nested code to access above variables */
 #include "config.h"
 
 /* attempt to encapsulate suck into one file */
 #include "client.h"
+
+#include "mac.c"
 
 /* function implementations */
 static int
@@ -993,12 +1006,14 @@ clientborders(Client *c, int width, int height, int bw, int radius,
 	rectplace(c->border.left, 0, radius, bw, vertical, crop);
 	rectplace(c->border.right, MAX(0, width - bw), radius, bw, vertical, crop);
 
-	rectplace(c->border.top_left, 0, 0, radius, radius, crop);
-	rectplace(c->border.top_right, MAX(0, width - radius), 0, radius, radius, crop);
+	/* no frame, no corners: they would show through a rounded client */
+	vertical = bw > 0 ? radius : 0;
+	rectplace(c->border.top_left, 0, 0, vertical, vertical, crop);
+	rectplace(c->border.top_right, MAX(0, width - radius), 0, vertical, vertical, crop);
 	rectplace(c->border.bottom_right, MAX(0, width - radius),
-			MAX(0, height - radius), radius, radius, crop);
+			MAX(0, height - radius), vertical, vertical, crop);
 	rectplace(c->border.bottom_left, 0, MAX(0, height - radius),
-			radius, radius, crop);
+			vertical, vertical, crop);
 
 	if (c->blur) {
 		struct wlr_box b = {bw, bw, MAX(0, width - 2 * bw), MAX(0, height - 2 * bw)};
@@ -1450,7 +1465,7 @@ applyrules(Client *c)
 		}
 	}
 
-	c->isfloating |= client_is_float_type(c);
+	c->isfloating |= client_is_float_type(c) || mac_stacking;
 	setmon(c, mon, ws);
 }
 
@@ -1745,8 +1760,15 @@ wsdragplace(void)
 					wlr_scene_node_set_enabled(&c->scene->node, 0);
 		wsdrag.dir = dir;
 		wsdrag.nb = (m->ws + NUMWS + dir) % NUMWS;
-		wsdragtile(m, wsdrag.nb);
+		if (mac_stacking && ((int)m->ws + dir < 0
+				|| (int)m->ws + dir >= (int)macspaces(m)))
+			wsdrag.nb = NUMWS;
+		else
+			wsdragtile(m, wsdrag.nb);
 	}
+	/* past the first or last space the desktop only gives a little */
+	if (mac_stacking && wsdrag.nb >= NUMWS)
+		off /= 5;
 	fs = wsfullscreen(m, wsdrag.nb);
 	wl_list_for_each(c, &clients, link) {
 		if (c->mon != m || client_is_unmanaged(c))
@@ -1858,7 +1880,7 @@ wsdragend(int cancelled, uint32_t time)
 	int span = wsdragspan(), dir = wsdrag.dir, commit, dur;
 	unsigned int oldws = m->ws;
 
-	commit = !cancelled && dir
+	commit = !cancelled && dir && wsdrag.nb < NUMWS
 			&& ((dir > 0 && p < 0.0 && proj <= -0.5) || (dir < 0 && p > 0.0 && proj >= 0.5));
 	left = (commit ? 1.0 - fabs(shown) : fabs(shown)) * span;
 	dur = (int)(MAX(180, animation_duration * 5 / 4) * left / MAX(1, span));
@@ -2039,7 +2061,10 @@ gestureupdate(uint32_t fingers, double dx, double dy)
 	} else if (fingers == 3 && fabs(overview_swipe_dy) >= 48.0
 			&& fabs(overview_swipe_dy) > fabs(overview_swipe_dx) * 1.2) {
 		overview_swipe_triggered = 1;
-		overviewset(overview_swipe_dy < 0.0);
+		if (mac_stacking && overview_swipe_dy > 0.0 && !overview_active)
+			macappexpose(NULL);
+		else
+			overviewset(overview_swipe_dy < 0.0);
 	}
 }
 
@@ -3573,7 +3598,8 @@ setlayout(Monitor *m, unsigned int lt)
 	Client *c, *sel;
 	unsigned int ws;
 
-	if (!m || lt >= LtLast || m->lt == lt)
+	/* stacking windows float over a layout that never tiles */
+	if (!m || lt >= LtLast || m->lt == lt || (mac_stacking && lt != LtBSP))
 		return;
 	sel = focustop(m);
 	for (ws = 0; ws < NUMWS; ws++) {
@@ -3713,10 +3739,13 @@ buttonpress(struct wl_listener *listener, void *data)
 		/* TODO: should reset to the pointer focus's current setcursor */
 		if (!locked && cursor_mode != CurNormal && cursor_mode != CurPressed) {
 			wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
-			if (cursor_mode == CurMove || cursor_mode == CurResize) {
+			if (cursor_mode == CurMove || cursor_mode == CurResize
+					|| cursor_mode == CurMacResize) {
 				/* Drop the window off on its new monitor */
 				selmon = xytomon(cursor->x, cursor->y);
 				setmon(grabc, selmon, -1);
+				if (cursor_mode == CurMove)
+					macdragend(grabc);
 			} else if ((cursor_mode == CurDragTile
 					|| cursor_mode == CurBSPMove
 					|| cursor_mode == CurDriftMove
@@ -4765,7 +4794,7 @@ createmon(struct wl_listener *listener, void *data)
 		wl_list_init(&m->cols[i]);
 		m->camz[i] = 1.0;
 	}
-	m->lt = default_layout >= 0 && default_layout < LtLast
+	m->lt = default_layout >= 0 && default_layout < LtLast && !mac_stacking
 			? (unsigned int)default_layout : LtBSP;
 
 	m->unblock = wl_event_loop_add_timer(event_loop, monunblock, m);
@@ -4826,6 +4855,9 @@ createnotify(struct wl_listener *listener, void *data)
 	LISTEN(&toplevel->events.request_fullscreen, &c->fullscreen, fullscreennotify);
 	LISTEN(&toplevel->events.request_maximize, &c->maximize, maximizenotify);
 	LISTEN(&toplevel->events.set_title, &c->set_title, updatetitle);
+	LISTEN(&toplevel->events.request_move, &c->req_move, macrequestmove);
+	LISTEN(&toplevel->events.request_resize, &c->req_resize, macrequestresize);
+	LISTEN(&toplevel->events.request_minimize, &c->req_minimize, macrequestminimize);
 }
 
 void
@@ -5038,6 +5070,9 @@ destroynotify(struct wl_listener *listener, void *data)
 		wl_list_remove(&c->map.link);
 		wl_list_remove(&c->unmap.link);
 		wl_list_remove(&c->maximize.link);
+		wl_list_remove(&c->req_move.link);
+		wl_list_remove(&c->req_resize.link);
+		wl_list_remove(&c->req_minimize.link);
 	}
 	free(c);
 }
@@ -5224,6 +5259,8 @@ focusclient(Client *c, int lift)
 
 	/* Have a client, so focus its top-level wlr_surface */
 	client_notify_enter(client_surface(c), wlr_seat_get_keyboard(seat));
+	if (mac_stacking)
+		macsendmods(wlr_seat_get_keyboard(seat));
 
 	/* Activate the new client */
 	client_activate_surface(client_surface(c), 1);
@@ -5338,6 +5375,10 @@ ftlactivatenotify(struct wl_listener *listener, void *data)
 	Arg a;
 	if (!c->mon)
 		return;
+	if (mac_stacking) {
+		macftlactivate(c);
+		return;
+	}
 	/* the overview hides every window, so a dock click there would focus
 	 * something the user cannot see: step out of it first */
 	overviewset(0);
@@ -5620,6 +5661,7 @@ ipcnotifyall(void)
 	wl_list_for_each(io, &ipc_outputs, link)
 		ipcstatus(io);
 	saveworkspacestate();
+	macsavestate();
 }
 
 static void
@@ -6004,7 +6046,7 @@ overviewpanel(Monitor *m, unsigned int ws, const struct wlr_box *box, float opac
 	overviewrect(tree, *box, oc.radius, shadecolor, &m->m);
 
 	wl_list_for_each_reverse(c, &clients, link) {
-		if (c->mon == m && c->ws == ws
+		if (c->mon == m && c->ws == ws && !c->minimized
 				&& (!overview_dragging || c != overview_drag_client))
 			overviewwindow(tree, m, c, box, opacity, c == focus);
 	}
@@ -6200,6 +6242,10 @@ overviewbuild(void)
 {
 	Monitor *m;
 
+	if (mac_stacking) {
+		mcbuild();
+		return;
+	}
 	overviewclear();
 	wl_list_for_each(m, &mons, link) {
 		/* light dim only, so the wallpaper stays visible as the backdrop */
@@ -6312,6 +6358,10 @@ overviewbutton(struct wlr_pointer_button_event *event)
 	struct wlr_box box;
 	int panel;
 
+	if (mac_stacking) {
+		mcbutton(event);
+		return;
+	}
 	if (event->state == WL_POINTER_BUTTON_STATE_PRESSED) {
 		overview_button_swallow = 1;
 		if (!overview_active || event->button != BTN_LEFT)
@@ -6407,6 +6457,8 @@ overviewmotion(void)
 	Monitor *m;
 	Client *c;
 
+	if (mac_stacking)
+		return mcmotion();
 	if (!overview_visible)
 		return 0;
 	if (!overview_active)
@@ -6557,7 +6609,10 @@ workspacestepcarry(int dir, int carry)
 		selmon = m;
 	if (!overviewvalid(selmon) || !dir)
 		return;
-	if (overview_active)
+	if (overview_active && mac_stacking) {
+		wsstep(&a);
+		overviewbuild();
+	} else if (overview_active)
 		overviewnavigate((selmon->ws + NUMWS + dir) % NUMWS, dir);
 	else if (!overview_visible && carry)
 		movewsstep(&a);
@@ -6699,6 +6754,8 @@ overviewkeybinding(uint32_t mods, xkb_keysym_t sym)
 {
 	const Bind *b;
 
+	if (mac_stacking)
+		return mckey(mods, sym);
 	if (!CLEANMASK(mods) || inputmode == ModeNormal)
 		return overviewkey(sym);
 	for (b = runkeys; b < runkeys + nrunkeys; b++) {
@@ -6817,7 +6874,8 @@ keypress(struct wl_listener *listener, void *data)
 		}
 	} else if (!locked && event->state == WL_KEYBOARD_KEY_STATE_RELEASED
 			&& super && group->super_down) {
-		if (group->super_alone)
+		if (!macsuperup() && group->super_alone
+				&& (!mac_stacking || mac_super_tap))
 			overviewtoggle(NULL);
 		group->super_down = group->super_alone = 0;
 		if (super_group == group)
@@ -6867,6 +6925,9 @@ keypress(struct wl_listener *listener, void *data)
 		return;
 
 	wlr_seat_set_keyboard(seat, &group->wlr_group->keyboard);
+	if (macsendkey(&group->wlr_group->keyboard, event->time_msec,
+			event->keycode, event->state))
+		return;
 	/* Pass unhandled keycodes along to the client. */
 	wlr_seat_keyboard_notify_key(seat, event->time_msec,
 			event->keycode, event->state);
@@ -6881,8 +6942,7 @@ keypressmod(struct wl_listener *listener, void *data)
 
 	wlr_seat_set_keyboard(seat, &group->wlr_group->keyboard);
 	/* Send modifiers to the client. */
-	wlr_seat_keyboard_notify_modifiers(seat,
-			&group->wlr_group->keyboard.modifiers);
+	macsendmods(&group->wlr_group->keyboard);
 }
 
 int
@@ -7025,6 +7085,7 @@ mapnotify(struct wl_listener *listener, void *data)
 			wlr_foreign_toplevel_handle_v1_set_app_id(c->ftl, appid);
 		LISTEN(&c->ftl->events.request_activate, &c->ftl_activate, ftlactivatenotify);
 		LISTEN(&c->ftl->events.request_close, &c->ftl_close, ftlclosenotify);
+		LISTEN(&c->ftl->events.request_minimize, &c->ftl_minimize, macftlminimize);
 	}
 
 	/* Set initial monitor, tags, floating status, and focus:
@@ -7041,7 +7102,9 @@ mapnotify(struct wl_listener *listener, void *data)
 	/* Wayland windows carry no position and an X11 one often asks for the
 	 * corner: a floating window opening there sits over the bar. Dialogs
 	 * go to the centre of their parent, the rest to the window area. */
-	if (c->isfloating && c->mon && !c->isfullscreen
+	if (mac_stacking) {
+		macmap(c, p);
+	} else if (c->isfloating && c->mon && !c->isfullscreen
 			&& ((p && !client_is_x11(c))
 				|| (c->geom.x - c->mon->m.x < 48 && c->geom.y - c->mon->m.y < 48))) {
 		struct wlr_box area = c->mon->w;
@@ -7115,6 +7178,10 @@ maximizenotify(struct wl_listener *listener, void *data)
 	 * protocol version
 	 * wlr_xdg_surface_schedule_configure() is used to send an empty reply. */
 	Client *c = wl_container_of(listener, c, maximize);
+	if (mac_stacking && client_surface(c)->mapped) {
+		maczoom(c);
+		return;
+	}
 	if (c->surface.xdg->initialized
 			&& wl_resource_get_version(c->surface.xdg->toplevel->resource)
 					< XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION)
@@ -7176,7 +7243,7 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 				&& cursor_mode != CurDragTile && cursor_mode != CurResizeCol
 				&& cursor_mode != CurBSPMove && cursor_mode != CurBSPResize
 				&& cursor_mode != CurDriftMove && cursor_mode != CurDriftResize
-				&& cursor_mode != CurDriftPan) {
+				&& cursor_mode != CurDriftPan && cursor_mode != CurMacResize) {
 			toplevel_from_wlr_surface(active_constraint->surface, &c, NULL);
 			if (c && active_constraint->surface == seat->pointer_state.focused_surface) {
 				sx = cursor->x - c->geom.x - c->bw;
@@ -7194,6 +7261,7 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 
 		wlr_cursor_move(cursor, device, dx, dy);
 		wlr_idle_notifier_v1_notify_activity(idle_notifier, seat);
+		machotcorner();
 
 		/* Update selmon (even while dragging a window) */
 		if (sloppyfocus)
@@ -7210,6 +7278,10 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 		/* Move the grabbed client to the new position. */
 		resize(grabc, (struct wlr_box){.x = (int)round(cursor->x) - grabcx, .y = (int)round(cursor->y) - grabcy,
 			.width = grabc->geom.width, .height = grabc->geom.height}, 1);
+		macdragmotion();
+		return;
+	} else if (cursor_mode == CurMacResize) {
+		macresizemotion();
 		return;
 	} else if (cursor_mode == CurResize) {
 		resize(grabc, (struct wlr_box){.x = grabc->geom.x, .y = grabc->geom.y,
@@ -7347,6 +7419,8 @@ moveresize(const Arg *arg)
 		return;
 	}
 
+	if (macmoveresize(grabc, arg->ui == CurDriftMove ? CurMove : arg->ui))
+		return;
 	/* Float the window and tell motionnotify to grab it */
 	setfloating(grabc, 1);
 	switch (cursor_mode = (arg->ui == CurDriftMove ? CurMove : arg->ui)) {
@@ -7689,8 +7763,9 @@ requestdecorationmode(struct wl_listener *listener, void *data)
 {
 	Client *c = wl_container_of(listener, c, set_decoration_mode);
 	if (c->surface.xdg->initialized)
-		wlr_xdg_toplevel_decoration_v1_set_mode(c->decoration,
-				WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+		wlr_xdg_toplevel_decoration_v1_set_mode(c->decoration, mac_stacking
+				? WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE
+				: WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
 }
 
 void
@@ -7957,6 +8032,7 @@ setfullscreen(Client *c, int fullscreen)
 		resize(c, c->prev, 0);
 	}
 	arrange(c->mon);
+	macfullscreen(c, fullscreen);
 }
 
 void
@@ -8082,13 +8158,14 @@ cfgbindcombo(char *combo, uint32_t *mods, xkb_keysym_t *sym)
 	*mods = 0;
 	for (tok = strtok_r(combo, "+", &save); tok; tok = strtok_r(NULL, "+", &save)) {
 		if (last) {
-			if (!strcmp(last, "mod") || !strcmp(last, "super") || !strcmp(last, "logo"))
+			if (!strcmp(last, "mod") || !strcmp(last, "super") || !strcmp(last, "logo")
+					|| !strcmp(last, "cmd"))
 				*mods |= WLR_MODIFIER_LOGO;
 			else if (!strcmp(last, "shift"))
 				*mods |= WLR_MODIFIER_SHIFT;
 			else if (!strcmp(last, "ctrl") || !strcmp(last, "control"))
 				*mods |= WLR_MODIFIER_CTRL;
-			else if (!strcmp(last, "alt"))
+			else if (!strcmp(last, "alt") || !strcmp(last, "opt"))
 				*mods |= WLR_MODIFIER_ALT;
 			else
 				return 0;
@@ -8540,6 +8617,32 @@ cfgaction(const char *act, void (**func)(const Arg *), Arg *arg)
 		{ "wm:move_right",            movedir,              {.i = DirRight} },
 		{ "wm:move_up",               movedir,              {.i = DirUp} },
 		{ "wm:move_down",             movedir,              {.i = DirDown} },
+		{ "wm:mission_control",       macmissioncontrol,    {0} },
+		{ "wm:app_expose",            macappexpose,         {0} },
+		{ "wm:show_desktop",          macshowdesktop,       {0} },
+		{ "wm:app_switch",            macswitch,            {.i = +1} },
+		{ "wm:app_switch_prev",       macswitch,            {.i = -1} },
+		{ "wm:app_window_next",       macappnext,           {0} },
+		{ "wm:hide_app",              machideapp,           {.i = 0} },
+		{ "wm:hide_others",           machideapp,           {.i = 1} },
+		{ "wm:quit_app",              macquitapp,           {0} },
+		{ "wm:minimize",              macminimizeaction,    {0} },
+		{ "wm:zoom",                  maczoomaction,        {0} },
+		{ "wm:space_prev",            wsstep,               {.i = -1} },
+		{ "wm:space_next",            wsstep,               {.i = +1} },
+		{ "wm:space_add",             macspaceadd,          {0} },
+		{ "wm:space_remove",          macspacedel,          {0} },
+		{ "wm:tile:left",             mactile,              {.i = TileLeft} },
+		{ "wm:tile:right",            mactile,              {.i = TileRight} },
+		{ "wm:tile:top",              mactile,              {.i = TileTop} },
+		{ "wm:tile:bottom",           mactile,              {.i = TileBottom} },
+		{ "wm:tile:fill",             mactile,              {.i = TileFill} },
+		{ "wm:tile:center",           mactile,              {.i = TileCenter} },
+		{ "wm:tile:top_left",         mactile,              {.i = TileTL} },
+		{ "wm:tile:top_right",        mactile,              {.i = TileTR} },
+		{ "wm:tile:bottom_left",      mactile,              {.i = TileBL} },
+		{ "wm:tile:bottom_right",     mactile,              {.i = TileBR} },
+		{ "wm:tile:restore",          mactile,              {.i = TileRestore} },
 	};
 	size_t i;
 	int n;
@@ -8925,6 +9028,8 @@ readconfig(void)
 				cfgaddbind(&runkeys, &nrunkeys, mods, sym, func, arg);
 			else
 				cfgaddbind(&runnormalkeys, &nrunnormalkeys, mods, sym, func, arg);
+		} else if (maccfg(k, v)) {
+			continue;
 		} else if (!strcmp(k, "remember_layout")) {
 			remember_layout = !strcmp(v, "true") || !strcmp(v, "1");
 		} else if (!strcmp(k, "start_in_overview")) {
@@ -9552,13 +9657,16 @@ viewws(const Arg *arg)
 	unsigned int oldws, forward, backward;
 	int animate, dir, started = 0;
 
-	if (!selmon || selmon->ws == arg->ui)
+	if (!selmon || selmon->ws == arg->ui
+			|| (mac_stacking && arg->ui >= macspaces(selmon)))
 		return;
 	wlr_log(WLR_DEBUG, "viewws: %u -> %u", selmon->ws, arg->ui);
 	oldws = selmon->ws;
 	forward = (arg->ui + NUMWS - oldws) % NUMWS;
 	backward = (oldws + NUMWS - arg->ui) % NUMWS;
 	dir = forward <= backward ? 1 : -1;
+	if (mac_stacking)
+		dir = arg->ui > oldws ? 1 : -1;
 	animate = animations && animation_duration > 0 && !overview_visible;
 	/* always settle whatever was still moving: an animation left running
 	 * across a switch finishes against the new workspace and takes windows
@@ -9647,6 +9755,14 @@ wsstep(const Arg *arg)
 	Arg a;
 	if (!selmon)
 		return;
+	if (mac_stacking) {
+		int ws = (int)selmon->ws + arg->i;
+		if (ws < 0 || ws >= (int)macspaces(selmon))
+			return;
+		a.ui = (unsigned int)ws;
+		viewws(&a);
+		return;
+	}
 	a.ui = (selmon->ws + NUMWS + arg->i) % NUMWS;
 	viewws(&a);
 }
@@ -9657,6 +9773,14 @@ movewsstep(const Arg *arg)
 	Arg a;
 	if (!selmon)
 		return;
+	if (mac_stacking) {
+		int ws = (int)selmon->ws + arg->i;
+		if (ws < 0 || ws >= (int)macspaces(selmon))
+			return;
+		a.ui = (unsigned int)ws;
+		movetowsfollow(&a);
+		return;
+	}
 	a.ui = (selmon->ws + NUMWS + arg->i) % NUMWS;
 	movetowsfollow(&a);
 }
@@ -9768,6 +9892,7 @@ unmapnotify(struct wl_listener *listener, void *data)
 {
 	/* Called when the surface is unmapped, and should no longer be shown. */
 	Client *c = wl_container_of(listener, c, unmap);
+	macunmap(c);
 	clientcloseanim(c);
 	c->anim.closing = 0;
 	if (c == grabc) {
@@ -9786,6 +9911,7 @@ unmapnotify(struct wl_listener *listener, void *data)
 	if (c->ftl) {
 		wl_list_remove(&c->ftl_activate.link);
 		wl_list_remove(&c->ftl_close.link);
+		wl_list_remove(&c->ftl_minimize.link);
 		wlr_foreign_toplevel_handle_v1_destroy(c->ftl);
 		c->ftl = NULL;
 	}
@@ -9809,6 +9935,7 @@ unmapnotify(struct wl_listener *listener, void *data)
 	c->border.bottom_right = c->border.bottom_left = NULL;
 	c->blur = NULL;
 	motionnotify(0, NULL, 0, 0, 0, 0);
+	macunmapped();
 	ipcnotifyall();
 	if (overview_visible)
 		overviewbuild();
@@ -9951,6 +10078,9 @@ virtualkeyboard(struct wl_listener *listener, void *data)
 
 	/* Add the new keyboard to the group */
 	wlr_keyboard_group_add_keyboard(group->wlr_group, &kb->keyboard);
+	/* with no real keyboard the seat never said it had one */
+	wlr_seat_set_capabilities(seat, seat->capabilities
+			| WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD);
 }
 
 void
@@ -9960,6 +10090,7 @@ virtualpointer(struct wl_listener *listener, void *data)
 	struct wlr_input_device *device = &event->new_pointer->pointer.base;
 
 	wlr_cursor_attach_input_device(cursor, device);
+	wlr_seat_set_capabilities(seat, seat->capabilities | WL_SEAT_CAPABILITY_POINTER);
 	if (event->suggested_output)
 		wlr_cursor_map_input_to_output(cursor, device, event->suggested_output);
 }
