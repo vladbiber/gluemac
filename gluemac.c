@@ -155,6 +155,7 @@ struct Client {
 	struct wlr_scene_tree *scene_surface;
 	struct wlr_scene_buffer *surfbuf; /* main surface buffer, for fx */
 	struct wlr_scene_blur *blur; /* backdrop blur behind that buffer */
+	struct wlr_scene_shadow *shadow; /* drop shadow in stacking mode */
 	struct wlr_foreign_toplevel_handle_v1 *ftl;
 	struct wl_list link;
 	struct wl_list flink;
@@ -1015,6 +1016,18 @@ clientborders(Client *c, int width, int height, int bw, int radius,
 	rectplace(c->border.bottom_left, 0, MAX(0, height - radius),
 			vertical, vertical, crop);
 
+	if (c->shadow) {
+		/* cast a little downwards and never show through the window */
+		const int dy = 10, sp = 44;
+		wlr_scene_node_set_enabled(&c->shadow->node, !c->isfullscreen
+				&& width > 0 && height > 0);
+		wlr_scene_shadow_set_size(c->shadow, width + 2 * sp, height + 2 * sp);
+		wlr_scene_shadow_set_corner_radius(c->shadow, radius);
+		wlr_scene_node_set_position(&c->shadow->node, -sp, -sp + dy);
+		wlr_scene_shadow_set_clipped_region(c->shadow, (struct clipped_region){
+				.area = {sp, sp - dy, width, height},
+				.corners = corner_radii_all(radius)});
+	}
 	if (c->blur) {
 		struct wlr_box b = {bw, bw, MAX(0, width - 2 * bw), MAX(0, height - 2 * bw)};
 		if (crop && !boxclip(&b, crop))
@@ -7059,6 +7072,11 @@ mapnotify(struct wl_listener *listener, void *data)
 
 	/* The blur goes under the frame and the surface, so it paints what is
 	 * behind the whole window. */
+	if (mac_stacking && (c->shadow = wlr_scene_shadow_create(c->scene, 0, 0,
+			corner_radius, 22.0f, (float[]){0.0f, 0.0f, 0.0f, 0.42f}))) {
+		c->shadow->node.data = c;
+		wlr_scene_node_lower_to_bottom(&c->shadow->node);
+	}
 	if ((c->blur = wlr_scene_blur_create(c->scene, 0, 0))) {
 		c->blur->node.data = c;
 		wlr_scene_node_lower_to_bottom(&c->blur->node);
@@ -9934,6 +9952,7 @@ unmapnotify(struct wl_listener *listener, void *data)
 	c->border.top_left = c->border.top_right = NULL;
 	c->border.bottom_right = c->border.bottom_left = NULL;
 	c->blur = NULL;
+	c->shadow = NULL;
 	motionnotify(0, NULL, 0, 0, 0, 0);
 	macunmapped();
 	ipcnotifyall();
