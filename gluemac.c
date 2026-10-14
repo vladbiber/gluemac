@@ -5578,6 +5578,18 @@ ipcdispatch(struct wl_client *client, struct wl_resource *resource,
 		const char *dispatch, const char *arg1, const char *arg2,
 		const char *arg3, const char *arg4, const char *arg5)
 {
+	/* any wm: action, run as if bound to a key on this output; spawn: is
+	 * left out so a client cannot run commands through it */
+	IpcOutput *io = wl_resource_get_user_data(resource);
+	void (*func)(const Arg *) = NULL;
+	Arg arg = {0};
+
+	if (!dispatch || strncmp(dispatch, "wm:", 3) || !cfgaction(dispatch, &func, &arg)
+			|| !func)
+		return;
+	if (io && io->mon)
+		selmon = io->mon;
+	func(&arg);
 }
 
 static const struct zdwl_ipc_output_v2_interface ipc_output_impl = {

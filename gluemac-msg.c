@@ -131,7 +131,7 @@ static const struct wl_registry_listener reg_listener = {
 static void
 usage(void)
 {
-	fputs("usage: gluemac-msg [-o OUTPUT] workspace N | move N | layout NAME\n"
+	fputs("usage: gluemac-msg [-o OUTPUT] workspace N | move N | action wm:NAME | layout NAME\n"
 			"       gluemac-msg [-o OUTPUT] power on|off\n"
 			"       gluemac-msg status | outputs | quit\n", stderr);
 	exit(2);
@@ -242,6 +242,8 @@ main(int argc, char *argv[])
 			zdwl_ipc_output_v2_set_tags(target->ipc, 1u << (n - 1), 0);
 		else
 			zdwl_ipc_output_v2_set_client_tags(target->ipc, 0, 1u << (n - 1));
+	} else if (!strcmp(cmd, "action")) {
+		zdwl_ipc_output_v2_dispatch(target->ipc, argv[2], "", "", "", "", "");
 	} else if (!strcmp(cmd, "layout")) {
 		unsigned int l;
 		for (l = 0; l < nlayouts && strcmp(layouts[l], argv[2]); l++);
