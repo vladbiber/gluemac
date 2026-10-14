@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=gluewc
+Name=gluemac
 Comment=Animated BSP Wayland compositor
-Exec=gluewc-session
+Exec=gluemac-session
 Type=Application
-DesktopNames=gluewc
+DesktopNames=gluemac

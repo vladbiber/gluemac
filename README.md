@@ -1,10 +1,10 @@
-# gluewc
+# gluemac
 
-[![build](https://github.com/vladbiber/gluewc/actions/workflows/build.yml/badge.svg)](https://github.com/vladbiber/gluewc/actions/workflows/build.yml)
+[![build](https://github.com/vladbiber/gluemac/actions/workflows/build.yml/badge.svg)](https://github.com/vladbiber/gluemac/actions/workflows/build.yml)
 [![license: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![wlroots 0.20](https://img.shields.io/badge/wlroots-0.20-7aa2f7.svg)](https://gitlab.freedesktop.org/wlroots/wlroots/-/releases/0.20.2)
 
-gluewc is a compact, animated Wayland compositor built around automatic BSP
+gluemac is a compact, animated Wayland compositor built around automatic BSP
 tiling. It combines a dwl-sized C codebase with workspaces, a GNOME-style
 overview, touchpad gestures, runtime configuration and SceneFX visuals.
 
@@ -26,7 +26,7 @@ It is a fork of [dwl 0.8](https://codeberg.org/dwl/dwl), using
 the shell's dash along the bottom.*
 
 There is a longer clip in
-[docs/media/glue-demo.mp4](https://github.com/vladbiber/gluewc/raw/main/docs/media/glue-demo.mp4);
+[docs/media/glue-demo.mp4](https://github.com/vladbiber/gluemac/raw/main/docs/media/glue-demo.mp4);
 GitHub hands mp4 files over as downloads instead of playing them in the page.
 
 ## Highlights
@@ -66,22 +66,22 @@ One script covers all four cases. It detects the distribution, installs the
 build dependencies and audio, builds a compatible wlroots/SceneFX pair when
 the distribution does not package one, and installs the session entry. It asks
 for administrator privileges for the packages and the system install, and it
-never writes to `~/.config/gluewc/config.conf`.
+never writes to `~/.config/gluemac/config.conf`.
 
 **Just the compositor:**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/vladbiber/gluewc/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/vladbiber/gluemac/main/install.sh | sh
 ```
 
 **With the bar** — [glueqs](https://github.com/vladbiber/glueqs), a quickshell
-bar built for gluewc. Installs Quickshell from the distribution, or builds it
+bar built for gluemac. Installs Quickshell from the distribution, or builds it
 where there is no package (Chimera, Alpine, openSUSE), adds the tools its
 panels use, clones the bar into `~/.config/quickshell/glueqs` and starts it
 from the session:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/vladbiber/gluewc/main/install.sh | sh -s -- --with-bar
+curl -fsSL https://raw.githubusercontent.com/vladbiber/gluemac/main/install.sh | sh -s -- --with-bar
 ```
 
 **Update an existing checkout** — pulls the newest source, rebuilds, installs,
@@ -89,15 +89,15 @@ and finishes by listing what the defaults gained that your own config does not
 have. Your config is left alone; you copy across whatever you want:
 
 ```sh
-cd gluewc && ./install.sh --update          # add --with-bar to update that too
+cd gluemac && ./install.sh --update          # add --with-bar to update that too
 ./install.sh --check-config                 # only the list, no rebuild
 ```
 
 **By hand**, to read the script first or to build without it:
 
 ```sh
-git clone https://github.com/vladbiber/gluewc.git
-cd gluewc
+git clone https://github.com/vladbiber/gluemac.git
+cd gluemac
 less install.sh
 ./install.sh          # or: make && sudo make install
 ```
@@ -132,23 +132,23 @@ enabled. Pass `--no-audio` to keep your own audio stack.
 ### NixOS
 
 ```sh
-nix run github:vladbiber/gluewc          # try it without installing
+nix run github:vladbiber/gluemac          # try it without installing
 ```
 
 Permanently, add the flake as an input and enable the module, which registers
 the session and sets up PipeWire, the portals and Xwayland:
 
 ```nix
-imports = [ inputs.gluewc.nixosModules.default ];
-programs.gluewc.enable = true;
-programs.gluewc.bar.enable = true;   # the glueqs bar, with Quickshell from nixpkgs
+imports = [ inputs.gluemac.nixosModules.default ];
+programs.gluemac.enable = true;
+programs.gluemac.bar.enable = true;   # the glueqs bar, with Quickshell from nixpkgs
 ```
 
 ### From source
 
 ```sh
-git clone https://github.com/vladbiber/gluewc.git
-cd gluewc
+git clone https://github.com/vladbiber/gluemac.git
+cd gluemac
 ./install.sh --deps-only     # or install the dependencies yourself
 make
 sudo make install
@@ -157,11 +157,11 @@ sudo make install
 [The installation guide](docs/INSTALL.md) covers `PREFIX`, `DESTDIR`,
 `config.h`, building against a private wlroots and staying up to date.
 
-After installation, log out and select **gluewc** in the display manager. From
+After installation, log out and select **gluemac** in the display manager. From
 a TTY, run:
 
 ```sh
-gluewc-session
+gluemac-session
 ```
 
 The default bindings expect `alacritty`, `rofi`, `grim` and `slurp` for
@@ -172,7 +172,7 @@ every command can be replaced in the runtime config.
 
 ## First steps
 
-The session wrapper creates `~/.config/gluewc/config.conf` on first login.
+The session wrapper creates `~/.config/gluemac/config.conf` on first login.
 Saving it applies it: the file is watched and reloaded on the spot, and
 anything the parser rejects raises a red strip across the top of the screen
 and a notification naming the line. `Super+Shift+R` still reloads by hand.
@@ -204,7 +204,7 @@ and a notification naming the line. `Super+Shift+R` still reloads by hand.
 | `Super+O` | Toggle configured transparency |
 | `Super+Escape` | Enter normal mode; `I` returns to insert mode |
 | `Super+Shift+R` | Reload config in place (it also reloads itself when saved) |
-| `Super+M` or `Super+Shift+Q` | Quit gluewc |
+| `Super+M` or `Super+Shift+Q` | Quit gluemac |
 
 Media, volume and backlight sit on the function row, so they work on keyboards
 without media keys or with them behind `Fn`. The media keys themselves keep
@@ -221,7 +221,7 @@ doing the same thing, and in normal mode the same keys need no `Super`.
 
 Playback needs `playerctl`. Volume goes through `wpctl` (part of WirePlumber,
 so it is there on any PipeWire system) and falls back to `pactl`; the backlight
-goes through `gluewc-backlight`, which drives `brightnessctl` (or `light`) in
+goes through `gluemac-backlight`, which drives `brightnessctl` (or `light`) in
 5% steps down to 10% and 1% steps below that, so it reaches 0 and turns the
 panel off. Every one of these is a plain `spawn:` line in the config, so they
 can be pointed at anything else.
@@ -240,11 +240,11 @@ workspaces and the overview there.
 
 ## Desktop components
 
-gluewc deliberately does not bundle a bar, launcher or wallpaper daemon.
+gluemac deliberately does not bundle a bar, launcher or wallpaper daemon.
 Layer-shell clients reserve their own space, and wallpaper layers are included
 in the overview.
 
-Examples for `~/.config/gluewc/config.conf`:
+Examples for `~/.config/gluemac/config.conf`:
 
 ```ini
 autostart = swaybg -i ~/Pictures/wallpaper.jpg -m fill
@@ -253,30 +253,30 @@ autostart = waybar
 
 With no wallpaper program, `root_color = 000000` keeps the background black.
 Waybar can use its `dwl` workspaces module; desktop shells can also consume the
-foreign-toplevel protocol. For shells without a dwl-ipc module gluewc keeps
-`$XDG_STATE_HOME/gluewc/workspaces` up to date (one line per output: name,
-active, workspace, window counts, layout) and installs `gluewc-msg`, which
+foreign-toplevel protocol. For shells without a dwl-ipc module gluemac keeps
+`$XDG_STATE_HOME/gluemac/workspaces` up to date (one line per output: name,
+active, workspace, window counts, layout) and installs `gluemac-msg`, which
 speaks the same protocol from the command line:
 
 ```sh
-gluewc-msg status                        # one line per output
-gluewc-msg outputs                       # geometry, modes, mirror of each monitor
-gluewc-msg -o eDP-1 workspace 3          # view workspace 3 there
-gluewc-msg move 2                        # send the focused window to 2
-gluewc-msg layout scroll
-gluewc-msg -o eDP-1 power off            # switch the panel off (on brings it back)
+gluemac-msg status                        # one line per output
+gluemac-msg outputs                       # geometry, modes, mirror of each monitor
+gluemac-msg -o eDP-1 workspace 3          # view workspace 3 there
+gluemac-msg move 2                        # send the focused window to 2
+gluemac-msg layout scroll
+gluemac-msg -o eDP-1 power off            # switch the panel off (on brings it back)
 ```
 
 ### glueqs
 
 [glueqs](https://github.com/vladbiber/glueqs) is a Quickshell desktop shell
-written alongside gluewc: a dot-matrix bar with workspaces, tray, media,
+written alongside gluemac: a dot-matrix bar with workspaces, tray, media,
 network, weather and notifications, plus OSDs, a launcher, the wallpaper (it
 paints it itself, with a picker on `Super+W`) and a dash that appears over the
 overview. It is the shell in the video above. It runs on upstream Quickshell,
 so it works with whatever `quickshell` your distribution packages.
 
-It is entirely optional — gluewc runs with waybar, any other layer-shell bar,
+It is entirely optional — gluemac runs with waybar, any other layer-shell bar,
 or none at all — but it is the combination the compositor is developed against:
 
 ```ini
@@ -298,10 +298,10 @@ sudo make install
 ```
 
 Compiled defaults remain in `config.def.h`; normal users only need the runtime
-config. Run `man gluewc` for command-line and environment details.
+config. Run `man gluemac` for command-line and environment details.
 
 ## License and credits
 
-gluewc is GPL-3.0-or-later. It is derived from dwl, which grew from the wlroots
+gluemac is GPL-3.0-or-later. It is derived from dwl, which grew from the wlroots
 TinyWL example and carries code influenced by dwm and sway. See `LICENSE*` and
 the Git history for the complete notices.

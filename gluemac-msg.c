@@ -1,15 +1,15 @@
 /*
- * gluewc-msg - talk to gluewc over dwl-ipc-unstable-v2, the protocol the
+ * gluemac-msg - talk to gluemac over dwl-ipc-unstable-v2, the protocol the
  * compositor already speaks to bars.  This is what a shell without a native
  * dwl-ipc module (upstream quickshell, a script) uses to switch workspaces.
  *
- *   gluewc-msg [-o OUTPUT] workspace N     view workspace N (1-9)
- *   gluewc-msg [-o OUTPUT] move N          send the focused window to N
- *   gluewc-msg [-o OUTPUT] layout NAME     bsp, scroll or drift
- *   gluewc-msg [-o OUTPUT] power on|off    switch the output on or off
- *   gluewc-msg status                      one line per output, then exit
- *   gluewc-msg outputs                     the monitor state file, verbatim
- *   gluewc-msg quit                        end the session
+ *   gluemac-msg [-o OUTPUT] workspace N     view workspace N (1-9)
+ *   gluemac-msg [-o OUTPUT] move N          send the focused window to N
+ *   gluemac-msg [-o OUTPUT] layout NAME     bsp, scroll or drift
+ *   gluemac-msg [-o OUTPUT] power on|off    switch the output on or off
+ *   gluemac-msg status                      one line per output, then exit
+ *   gluemac-msg outputs                     the monitor state file, verbatim
+ *   gluemac-msg quit                        end the session
  *
  * Without -o the command goes to the first output the compositor lists.
  */
@@ -131,9 +131,9 @@ static const struct wl_registry_listener reg_listener = {
 static void
 usage(void)
 {
-	fputs("usage: gluewc-msg [-o OUTPUT] workspace N | move N | layout NAME\n"
-			"       gluewc-msg [-o OUTPUT] power on|off\n"
-			"       gluewc-msg status | outputs | quit\n", stderr);
+	fputs("usage: gluemac-msg [-o OUTPUT] workspace N | move N | layout NAME\n"
+			"       gluemac-msg [-o OUTPUT] power on|off\n"
+			"       gluemac-msg status | outputs | quit\n", stderr);
 	exit(2);
 }
 
@@ -155,16 +155,16 @@ main(int argc, char *argv[])
 		usage();
 	cmd = argv[1];
 	if (!strcmp(cmd, "outputs")) {
-		/* what gluewc writes on every layout change: name, geometry,
+		/* what gluemac writes on every layout change: name, geometry,
 		 * mode, scale, transform, mirror source and the mode list */
 		char path[600], buf[4096];
 		const char *env;
 		FILE *f;
 		size_t len;
 		if ((env = getenv("XDG_STATE_HOME")) && *env)
-			snprintf(path, sizeof path, "%s/gluewc/outputs", env);
+			snprintf(path, sizeof path, "%s/gluemac/outputs", env);
 		else if ((env = getenv("HOME")) && *env)
-			snprintf(path, sizeof path, "%s/.local/state/gluewc/outputs", env);
+			snprintf(path, sizeof path, "%s/.local/state/gluemac/outputs", env);
 		else
 			return 1;
 		if (!(f = fopen(path, "r"))) {
@@ -178,14 +178,14 @@ main(int argc, char *argv[])
 	}
 
 	if (!(dpy = wl_display_connect(NULL))) {
-		fputs("gluewc-msg: no wayland display\n", stderr);
+		fputs("gluemac-msg: no wayland display\n", stderr);
 		return 1;
 	}
 	reg = wl_display_get_registry(dpy);
 	wl_registry_add_listener(reg, &reg_listener, NULL);
 	wl_display_roundtrip(dpy);
 	if (!ipc_mgr) {
-		fputs("gluewc-msg: the compositor does not speak dwl-ipc\n", stderr);
+		fputs("gluemac-msg: the compositor does not speak dwl-ipc\n", stderr);
 		return 1;
 	}
 	wl_display_roundtrip(dpy); /* output names */
@@ -225,7 +225,7 @@ main(int argc, char *argv[])
 	if (!target && noutputs && !want)
 		target = &outputs[0];
 	if (!target) {
-		fprintf(stderr, "gluewc-msg: no output named %s\n", want);
+		fprintf(stderr, "gluemac-msg: no output named %s\n", want);
 		return 1;
 	}
 
@@ -234,7 +234,7 @@ main(int argc, char *argv[])
 	if (!strcmp(cmd, "workspace") || !strcmp(cmd, "move")) {
 		n = atoi(argv[2]);
 		if (n < 1 || n > 31 || (ntagcount && (unsigned int)n > ntagcount)) {
-			fprintf(stderr, "gluewc-msg: workspace must be 1..%u\n",
+			fprintf(stderr, "gluemac-msg: workspace must be 1..%u\n",
 					ntagcount ? ntagcount : 9);
 			return 1;
 		}
@@ -246,7 +246,7 @@ main(int argc, char *argv[])
 		unsigned int l;
 		for (l = 0; l < nlayouts && strcmp(layouts[l], argv[2]); l++);
 		if (l == nlayouts) {
-			fprintf(stderr, "gluewc-msg: unknown layout %s\n", argv[2]);
+			fprintf(stderr, "gluemac-msg: unknown layout %s\n", argv[2]);
 			return 1;
 		}
 		zdwl_ipc_output_v2_set_layout(target->ipc, l);
@@ -255,7 +255,7 @@ main(int argc, char *argv[])
 		if (!on && strcmp(argv[2], "off"))
 			usage();
 		if (!power_mgr) {
-			fputs("gluewc-msg: the compositor does not do output power\n", stderr);
+			fputs("gluemac-msg: the compositor does not do output power\n", stderr);
 			return 1;
 		}
 		zwlr_output_power_v1_set_mode(

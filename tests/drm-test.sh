@@ -4,31 +4,31 @@
 # machine comes back without the power button.
 #
 # Run from a spare TTY (Ctrl+Alt+F2, login), then:
-#   ~/gluewc/tests/drm-test.sh            # real config (full repro)
-#   ~/gluewc/tests/drm-test.sh noeffects  # blur/animations/opacity off
-#   ~/gluewc/tests/drm-test.sh noauto     # autostart stripped
-#   ~/gluewc/tests/drm-test.sh min        # no autostart, no effects
-# Ctrl+Alt+F1 goes back to the running session; log: ~/gluewc-drm-test-<mode>.log
+#   ~/gluemac/tests/drm-test.sh            # real config (full repro)
+#   ~/gluemac/tests/drm-test.sh noeffects  # blur/animations/opacity off
+#   ~/gluemac/tests/drm-test.sh noauto     # autostart stripped
+#   ~/gluemac/tests/drm-test.sh min        # no autostart, no effects
+# Ctrl+Alt+F1 goes back to the running session; log: ~/gluemac-drm-test-<mode>.log
 
 MODE="${1:-full}"
-LOG="$HOME/gluewc-drm-test-$MODE.log"
-BIN="${GLUEWC:-$HOME/gluewc/gluewc}"
-CFG="${XDG_CONFIG_HOME:-$HOME/.config}/gluewc/config.conf"
+LOG="$HOME/gluemac-drm-test-$MODE.log"
+BIN="${GLUEMAC:-$HOME/gluemac/gluemac}"
+CFG="${XDG_CONFIG_HOME:-$HOME/.config}/gluemac/config.conf"
 TIMEOUT=45
 
 TMP=$(mktemp -d) || exit 1
-mkdir -p "$TMP/cfg/gluewc"
-cp "$CFG" "$TMP/cfg/gluewc/config.conf" || exit 1
+mkdir -p "$TMP/cfg/gluemac"
+cp "$CFG" "$TMP/cfg/gluemac/config.conf" || exit 1
 strip_effects() {
 	sed -i -e 's/^blur .*/blur = false/' -e 's/^animations .*/animations = false/' \
 		-e 's/^corner_radius.*/corner_radius = 0/' -e 's/^opacity .*/opacity = 1.0/' \
-		"$TMP/cfg/gluewc/config.conf"
+		"$TMP/cfg/gluemac/config.conf"
 }
 case "$MODE" in
 full) ;;
 noeffects) strip_effects ;;
-noauto) sed -i '/^autostart/d' "$TMP/cfg/gluewc/config.conf" ;;
-min) sed -i '/^autostart/d' "$TMP/cfg/gluewc/config.conf"; strip_effects ;;
+noauto) sed -i '/^autostart/d' "$TMP/cfg/gluemac/config.conf" ;;
+min) sed -i '/^autostart/d' "$TMP/cfg/gluemac/config.conf"; strip_effects ;;
 *) echo "unknown mode: $MODE (full|noeffects|noauto|min)"; exit 1 ;;
 esac
 
@@ -47,7 +47,7 @@ GPID=$!
 WD=$!
 wait "$GPID"
 RC=$?
-echo "== gluewc exited rc=$RC ==" >> "$LOG"
+echo "== gluemac exited rc=$RC ==" >> "$LOG"
 kill "$WD" 2>/dev/null
 
 # quickshell --daemonize escapes the process group; kill only instances

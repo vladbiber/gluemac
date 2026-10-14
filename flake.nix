@@ -1,9 +1,9 @@
 {
-  description = "gluewc — an animated Wayland compositor with BSP, scrolling and infinite-canvas layouts";
+  description = "gluemac — an animated Wayland compositor with BSP, scrolling and infinite-canvas layouts";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
   # The bar's QML tree, packaged here so a broken glueqs flake can never
-  # break a gluewc rebuild; `nix flake update glueqs` moves it forward.
+  # break a gluemac rebuild; `nix flake update glueqs` moves it forward.
   inputs.glueqs = {
     url = "github:vladbiber/glueqs";
     flake = false;
@@ -34,13 +34,13 @@
       # BEGIN package
       # withBar adds the bar to the default config the session seeds at first
       # login, which is how the module's bar.enable reaches a fresh account.
-      mkGluewc =
+      mkGluemac =
         pkgs:
         {
           withBar ? false,
         }:
         pkgs.stdenv.mkDerivation {
-          pname = "gluewc";
+          pname = "gluemac";
           inherit version;
           src = self;
 
@@ -88,8 +88,8 @@
           # itself, D-Bus, Xwayland and the audio daemons that give the session
           # sound without any further configuration.
           postInstall = ''
-            wrapProgram $out/bin/gluewc-session \
-              --set-default GLUEWC_DATADIR $out/share/gluewc \
+            wrapProgram $out/bin/gluemac-session \
+              --set-default GLUEMAC_DATADIR $out/share/gluemac \
               --prefix PATH : ${
                 lib.makeBinPath (
                   with pkgs;
@@ -104,16 +104,16 @@
               }:$out/bin
           ''
           + lib.optionalString withBar ''
-            printf '\n# the glueqs bar\nautostart = glueqs\n' >> $out/share/gluewc/config.def.conf
+            printf '\n# the glueqs bar\nautostart = glueqs\n' >> $out/share/gluemac/config.def.conf
           '';
 
-          passthru.providedSessions = [ "gluewc" ];
+          passthru.providedSessions = [ "gluemac" ];
 
           meta = {
             description = "Animated Wayland compositor with BSP, scrolling and infinite-canvas layouts";
-            homepage = "https://github.com/vladbiber/gluewc";
+            homepage = "https://github.com/vladbiber/gluemac";
             license = lib.licenses.gpl3Only;
-            mainProgram = "gluewc";
+            mainProgram = "gluemac";
             platforms = lib.platforms.linux;
           };
         };
@@ -153,7 +153,7 @@
             runHook postInstall
           '';
           meta = {
-            description = "Dot-matrix desktop shell for gluewc, on Quickshell";
+            description = "Dot-matrix desktop shell for gluemac, on Quickshell";
             homepage = "https://github.com/vladbiber/glueqs";
             license = lib.licenses.gpl3Only;
             mainProgram = "glueqs";
@@ -163,20 +163,20 @@
     in
     {
       packages = forAllSystems (pkgs: rec {
-        gluewc = mkGluewc pkgs { };
-        gluewc-with-bar = mkGluewc pkgs { withBar = true; };
+        gluemac = mkGluemac pkgs { };
+        gluemac-with-bar = mkGluemac pkgs { withBar = true; };
         glueqs = mkGlueqs pkgs;
-        default = gluewc;
+        default = gluemac;
       });
 
       overlays.default = final: _prev: {
-        gluewc = mkGluewc final { };
+        gluemac = mkGluemac final { };
         glueqs = mkGlueqs final;
       };
 
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
-          inputsFrom = [ (mkGluewc pkgs { }) ];
+          inputsFrom = [ (mkGluemac pkgs { }) ];
           packages = with pkgs; [
             gdb
             foot
@@ -201,7 +201,7 @@
           ...
         }:
         let
-          cfg = config.programs.gluewc;
+          cfg = config.programs.gluemac;
           declares = path: lib.hasAttrByPath path options;
           setIfDeclared =
             path: value: lib.optionalAttrs (declares path) (lib.setAttrByPath path value);
@@ -214,36 +214,36 @@
             if found == null then { } else lib.setAttrByPath found value;
         in
         {
-          options.programs.gluewc = {
-            enable = lib.mkEnableOption "gluewc, an animated Wayland compositor";
+          options.programs.gluemac = {
+            enable = lib.mkEnableOption "gluemac, an animated Wayland compositor";
 
             package = lib.mkOption {
               type = lib.types.package;
               default =
                 if cfg.bar.enable then
-                  self.packages.${pkgs.stdenv.hostPlatform.system}.gluewc-with-bar
+                  self.packages.${pkgs.stdenv.hostPlatform.system}.gluemac-with-bar
                 else
-                  self.packages.${pkgs.stdenv.hostPlatform.system}.gluewc;
-              defaultText = lib.literalExpression "gluewc.packages.\${system}.gluewc";
+                  self.packages.${pkgs.stdenv.hostPlatform.system}.gluemac;
+              defaultText = lib.literalExpression "gluemac.packages.\${system}.gluemac";
               description = ''
-                The gluewc package to install. With bar.enable the default
+                The gluemac package to install. With bar.enable the default
                 is the same package whose seeded config autostarts glueqs.
               '';
             };
 
             bar = {
               enable = lib.mkEnableOption ''
-                glueqs, the Quickshell bar written for gluewc. Installs the
+                glueqs, the Quickshell bar written for gluemac. Installs the
                 `glueqs` command with Quickshell and the tools its panels use,
                 turns on Bluetooth and UPower, and seeds new accounts with
-                `autostart = glueqs`. An existing ~/.config/gluewc/config.conf
+                `autostart = glueqs`. An existing ~/.config/gluemac/config.conf
                 needs that line added by hand
               '';
 
               package = lib.mkOption {
                 type = lib.types.package;
                 default = self.packages.${pkgs.stdenv.hostPlatform.system}.glueqs;
-                defaultText = lib.literalExpression "gluewc.packages.\${system}.glueqs";
+                defaultText = lib.literalExpression "gluemac.packages.\${system}.glueqs";
                 description = "The glueqs package to install.";
               };
             };
@@ -261,7 +261,7 @@
           config = lib.mkIf cfg.enable (
             lib.mkMerge [
               {
-                # The package carries share/wayland-sessions/gluewc.desktop,
+                # The package carries share/wayland-sessions/gluemac.desktop,
                 # which is all a greeter reading XDG_DATA_DIRS needs.
                 environment.systemPackages = [ cfg.package ];
               }
@@ -279,7 +279,7 @@
                   xdg-desktop-portal-wlr
                   xdg-desktop-portal-gtk
                 ];
-                config.gluewc.default = lib.mkDefault [
+                config.gluemac.default = lib.mkDefault [
                   "wlr"
                   "gtk"
                 ];
@@ -310,7 +310,7 @@
                     [ "security" "rtkit" "enable" ]
                     [ "services" "rtkit" "enable" ]
                   ] (lib.mkDefault true))
-                  # gluewc-session starts the daemons itself, so a system
+                  # gluemac-session starts the daemons itself, so a system
                   # without user services still gets sound from this.
                   (setFirstDeclared [
                     [ "services" "pipewire" ]

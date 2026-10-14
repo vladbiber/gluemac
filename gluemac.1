@@ -1,8 +1,8 @@
 .Dd August 15, 2026
-.Dt GLUEWC 1
+.Dt GLUEMAC 1
 .Os
 .Sh NAME
-.Nm gluewc
+.Nm gluemac
 .Nd animated BSP Wayland compositor
 .Sh SYNOPSIS
 .Nm
@@ -17,8 +17,8 @@ tiling, fixed workspaces, modal controls, SceneFX effects and an animated
 workspace overview.
 .Pp
 The recommended entry point is
-.Nm gluewc-session
-or the gluewc display-manager session.
+.Nm gluemac-session
+or the gluemac display-manager session.
 .Bl -tag -width Ds
 .It Fl d
 Enable verbose wlroots logging.
@@ -28,17 +28,17 @@ Start
 through a shell with the compositor.
 Its process group receives
 .Dv SIGTERM
-when gluewc exits.
+when gluemac exits.
 .It Fl v
 Print the version and exit.
 .El
 .Sh CONFIGURATION
 Runtime configuration is read from
-.Pa $XDG_CONFIG_HOME/gluewc/config.conf
+.Pa $XDG_CONFIG_HOME/gluemac/config.conf
 or
-.Pa ~/.config/gluewc/config.conf .
+.Pa ~/.config/gluemac/config.conf .
 The installed session creates this file from
-.Pa /usr/local/share/gluewc/config.def.conf
+.Pa /usr/local/share/gluemac/config.def.conf
 on first login.
 .Pp
 Monitors are set up in the same file, one
@@ -60,9 +60,9 @@ A mirror shows the whole screen of another monitor scaled to fit;
 .Ql output = * mirror=eDP-1
 shows the laptop screen everywhere.
 The current state of every output is kept in
-.Pa $XDG_STATE_HOME/gluewc/outputs
+.Pa $XDG_STATE_HOME/gluemac/outputs
 and printed by
-.Ql gluewc-msg outputs .
+.Ql gluemac-msg outputs .
 .Pp
 Appearance, XKB settings, autostart commands and bindings can be changed at
 runtime.
@@ -191,10 +191,10 @@ It must be set.
 Base directory for the runtime config.
 .It Ev XDG_STATE_HOME
 Base directory used by
-.Nm gluewc-session
+.Nm gluemac-session
 for logs.
 .It Ev WAYLAND_DISPLAY
-Set by gluewc for child Wayland clients.
+Set by gluemac for child Wayland clients.
 .It Ev DISPLAY
 Set when the built-in XWayland server is ready.
 .It Ev WLR_*
@@ -204,16 +204,16 @@ Keyboard and cursor configuration used by the underlying libraries.
 .El
 .Sh FILES
 .Bl -tag -width Ds
-.It Pa ~/.config/gluewc/config.conf
+.It Pa ~/.config/gluemac/config.conf
 Runtime configuration.
-.It Pa ~/.local/state/gluewc/outputs
+.It Pa ~/.local/state/gluemac/outputs
 One tab-separated line per monitor: geometry, mode, scale, transform, mirror
 source and the available modes; rewritten on every layout change.
-.It Pa ~/.local/state/gluewc.log
-Current session log when started with gluewc-session.
-.It Pa ~/.local/state/gluewc.log.old
+.It Pa ~/.local/state/gluemac.log
+Current session log when started with gluemac-session.
+.It Pa ~/.local/state/gluemac.log.old
 Previous session log.
-.It Pa /usr/share/wayland-sessions/gluewc.desktop
+.It Pa /usr/share/wayland-sessions/gluemac.desktop
 Display-manager session entry.
 .El
 .Sh SEE ALSO
@@ -221,7 +221,7 @@ Display-manager session entry.
 .Xr waybar 5 ,
 .Xr xkeyboard-config 7
 .Sh AUTHORS
-.An "The gluewc contributors"
+.An "The gluemac contributors"
 .Pp
-gluewc is derived from dwl and the wlroots TinyWL example.
+gluemac is derived from dwl and the wlroots TinyWL example.
 Full copyright and license notices are included with the source.

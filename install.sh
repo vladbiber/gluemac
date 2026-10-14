@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-REPO_URL=${GLUEWC_REPO_URL:-https://github.com/vladbiber/gluewc.git}
-REPO_REF=${GLUEWC_REF:-main}
+REPO_URL=${GLUEMAC_REPO_URL:-https://github.com/vladbiber/gluemac.git}
+REPO_REF=${GLUEMAC_REF:-main}
 PREFIX=${PREFIX:-/usr/local}
 SESSIONDIR=${SESSIONDIR:-/usr/share/wayland-sessions}
 DESTDIR=${DESTDIR:-}
@@ -12,7 +12,7 @@ DEPS_ONLY=0
 UPDATE=0
 CHECK_CONFIG=0
 WITH_BAR=0
-BAR_REPO=${GLUEWC_BAR_REPO:-https://github.com/vladbiber/glueqs.git}
+BAR_REPO=${GLUEMAC_BAR_REPO:-https://github.com/vladbiber/glueqs.git}
 WLROOTS_VERSION=0.20.2
 SCENEFX_VERSION=0.5
 DRY_RUN=0
@@ -30,22 +30,22 @@ Usage: install.sh [options]
                    sound works in the session out of the box)
   --deps-only      install dependencies, then stop
   --update         pull the newest source into this checkout, then build and
-                   install it. Your ~/.config/gluewc/config.conf is never
+                   install it. Your ~/.config/gluemac/config.conf is never
                    touched; what is new in the defaults is listed at the end.
                    Add --no-deps to skip the package manager and go straight
                    to the rebuild
   --check-config   only list what the defaults gained that your config does
                    not have, and stop
-  --with-bar       also set up glueqs, the quickshell shell built for gluewc
+  --with-bar       also set up glueqs, the quickshell shell built for gluemac
                    (bar, wallpaper, launcher, OSDs, notifications), and start
                    it from the session. Installs Quickshell from the package
                    manager, or builds it where there is no package (Chimera,
                    Alpine, openSUSE). Works with --update too
   --dry-run        print the package-manager command without running it
-  --uninstall      remove gluewc from the selected prefix
+  --uninstall      remove gluemac from the selected prefix
   -h, --help       show this help
 
-Environment: GLUEWC_REPO_URL, GLUEWC_REF, GLUEWC_DISTRO, PREFIX, SESSIONDIR
+Environment: GLUEMAC_REPO_URL, GLUEMAC_REF, GLUEMAC_DISTRO, PREFIX, SESSIONDIR
 EOF
 }
 
@@ -155,7 +155,7 @@ case "$PREFIX" in
 *) die "--prefix must be an absolute path" ;;
 esac
 
-USER_CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}/gluewc/config.conf
+USER_CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}/gluemac/config.conf
 
 # Everything the shipped defaults declare and the personal config does not, so
 # an update can point at what it gained without editing anyone's file. Settings
@@ -335,7 +335,7 @@ build_quickshell() {
 	case "$(cc --version 2>/dev/null | head -n1)" in *clang*) pch=ON ;; esac
 	if ! cmake -G Ninja -S "$qsdir" -B "$qsdir/build" -Wno-dev \
 			-DCMAKE_BUILD_TYPE=Release -DCRASH_HANDLER=OFF -DNO_PCH=$pch \
-			-DDISTRIBUTOR="gluewc install.sh" \
+			-DDISTRIBUTOR="gluemac install.sh" \
 			-DCMAKE_INSTALL_PREFIX="$PREFIX" \
 			-DINSTALL_QML_PREFIX=lib/qt6/qml \
 			-DCMAKE_PREFIX_PATH="$PREFIX"; then
@@ -347,14 +347,14 @@ build_quickshell() {
 	# a fresh shell would find it; this one has not looked in $PREFIX/bin yet
 	hash -r 2>/dev/null || true
 	qtver=$(pkg-config --modversion Qt6Core 2>/dev/null || printf unknown)
-	run_root sh -c "mkdir -p '$PREFIX/share/gluewc' && printf '%s\n' '$qtver' > '$PREFIX/share/gluewc/quickshell-qt-version'"
+	run_root sh -c "mkdir -p '$PREFIX/share/gluemac' && printf '%s\n' '$qtver' > '$PREFIX/share/gluemac/quickshell-qt-version'"
 	log "Quickshell $QUICKSHELL_VERSION installed to $PREFIX/bin/qs (built against Qt $qtver)"
 }
 
 # A Quickshell built here against one Qt stops working after a Qt upgrade
 # (it uses private Qt API), so --update rebuilds it when the version moved.
 quickshell_stale() {
-	f=$PREFIX/share/gluewc/quickshell-qt-version
+	f=$PREFIX/share/gluemac/quickshell-qt-version
 	[ -r "$f" ] || return 1
 	[ "$(cat "$f")" != "$(pkg-config --modversion Qt6Core 2>/dev/null)" ]
 }
@@ -467,13 +467,13 @@ case "$0" in
 	SELF_DIR=
 	;;
 esac
-if [ -n "$SELF_DIR" ] && [ ! -f "$SELF_DIR/gluewc.c" ]; then
+if [ -n "$SELF_DIR" ] && [ ! -f "$SELF_DIR/gluemac.c" ]; then
 	SELF_DIR=
 fi
 
 if [ "$CHECK_CONFIG" -eq 1 ]; then
 	def=$SELF_DIR/config.def.conf
-	[ -r "$def" ] || def=$PREFIX/share/gluewc/config.def.conf
+	[ -r "$def" ] || def=$PREFIX/share/gluemac/config.def.conf
 	[ -r "$def" ] || die "no config.def.conf to compare against; run from a checkout or install first"
 	config_report "$def" "$USER_CONFIG"
 	exit 0
@@ -481,31 +481,31 @@ fi
 
 # Pull first, then hand over to the script that came with the new source: a
 # running sh reads its own file as it goes, so rewriting it underneath is not
-# safe. GLUEWC_REEXEC stops that from happening twice.
-if [ "$UPDATE" -eq 1 ] && [ -z "${GLUEWC_REEXEC:-}" ] && [ -n "$SELF_DIR" ] \
+# safe. GLUEMAC_REEXEC stops that from happening twice.
+if [ "$UPDATE" -eq 1 ] && [ -z "${GLUEMAC_REEXEC:-}" ] && [ -n "$SELF_DIR" ] \
 		&& [ -d "$SELF_DIR/.git" ]; then
 	log "Updating the checkout in $SELF_DIR"
 	command -v git >/dev/null 2>&1 || die "git is needed to update a checkout"
 	git -C "$SELF_DIR" pull --ff-only
-	GLUEWC_REEXEC=1
-	export GLUEWC_REEXEC
+	GLUEMAC_REEXEC=1
+	export GLUEMAC_REEXEC
 	exec sh "$SELF_DIR/install.sh" "$@"
 fi
 
 if [ "$UNINSTALL" -eq 1 ]; then
-	log "Removing gluewc"
-	run_install rm -f "$DESTDIR$PREFIX/bin/gluewc" "$DESTDIR$PREFIX/bin/gluewc-session" \
-		"$DESTDIR$PREFIX/bin/gluewc-msg" "$DESTDIR$PREFIX/bin/gluewc-backlight" \
-		"$DESTDIR$PREFIX/share/man/man1/gluewc.1" \
-		"$DESTDIR$PREFIX/share/gluewc/config.def.conf" \
-		"$DESTDIR$SESSIONDIR/gluewc.desktop"
-	run_install rm -rf "$DESTDIR$PREFIX/share/doc/gluewc"
-	printf 'gluewc was removed. Your ~/.config/gluewc directory was kept.\n'
+	log "Removing gluemac"
+	run_install rm -f "$DESTDIR$PREFIX/bin/gluemac" "$DESTDIR$PREFIX/bin/gluemac-session" \
+		"$DESTDIR$PREFIX/bin/gluemac-msg" "$DESTDIR$PREFIX/bin/gluemac-backlight" \
+		"$DESTDIR$PREFIX/share/man/man1/gluemac.1" \
+		"$DESTDIR$PREFIX/share/gluemac/config.def.conf" \
+		"$DESTDIR$SESSIONDIR/gluemac.desktop"
+	run_install rm -rf "$DESTDIR$PREFIX/share/doc/gluemac"
+	printf 'gluemac was removed. Your ~/.config/gluemac directory was kept.\n'
 	exit 0
 fi
 
-if [ -n "${GLUEWC_DISTRO:-}" ]; then
-	ID=$GLUEWC_DISTRO
+if [ -n "${GLUEMAC_DISTRO:-}" ]; then
+	ID=$GLUEMAC_DISTRO
 	ID_LIKE=
 elif [ -r /etc/os-release ]; then
 	. /etc/os-release
@@ -593,7 +593,7 @@ detect_family() {
 FAMILY=$(detect_family)
 
 # Sound is part of a working desktop, so PipeWire, WirePlumber and the ALSA
-# and PulseAudio bridges are installed with everything else. gluewc-session
+# and PulseAudio bridges are installed with everything else. gluemac-session
 # starts whichever of them it finds. --no-audio skips this.
 audio_packages() {
 	[ "$WITH_AUDIO" -eq 1 ] || return 0
@@ -612,32 +612,32 @@ audio_packages() {
 finix_instructions() {
 	cat <<'EOF'
 
-finix builds gluewc from the flake in this repository instead of installing
+finix builds gluemac from the flake in this repository instead of installing
 loose packages, so this script does not touch the system.
 
 To TRY it, without installing anything. These build the compositor and then
 start it: the screen is taken over until you quit with Super+Shift+Q, and
 nothing is left behind afterwards.
 
-  nix shell github:vladbiber/gluewc nixpkgs#alacritty nixpkgs#rofi \
-    -c gluewc-session
+  nix shell github:vladbiber/gluemac nixpkgs#alacritty nixpkgs#rofi \
+    -c gluemac-session
 
 The terminal and the launcher are named on purpose. The package deliberately
 does not carry them, and the compiled defaults bind Super+Q and Super+Return
 to alacritty and Super+Space to rofi, so without them you get a working but
 completely empty screen and no way to open anything. Two leaner variants:
 
-  nix run     github:vladbiber/gluewc                    # bare, no session
-  nix develop github:vladbiber/gluewc                    # a shell for make
+  nix run     github:vladbiber/gluemac                    # bare, no session
+  nix develop github:vladbiber/gluemac                    # a shell for make
 
 To INSTALL it, add the flake to /etc/finix and enable the module:
 
-  inputs.gluewc.url = "github:vladbiber/gluewc";
-  imports = [ inputs.gluewc.nixosModules.default ];
-  programs.gluewc.enable = true;
-  programs.gluewc.bar.enable = true;          # the glueqs bar, autostarted
+  inputs.gluemac.url = "github:vladbiber/gluemac";
+  imports = [ inputs.gluemac.nixosModules.default ];
+  programs.gluemac.enable = true;
+  programs.gluemac.bar.enable = true;          # the glueqs bar, autostarted
 
-then rebuild with 'finix-rebuild switch' and pick gluewc in your greeter.
+then rebuild with 'finix-rebuild switch' and pick gluemac in your greeter.
 The module notices that finix has
 no systemd and wires up the options finix does have (programs.pipewire,
 services.rtkit, services.polkit) instead of the NixOS ones; the session
@@ -718,30 +718,30 @@ report_apps() {
 nixos_instructions() {
 	cat <<'EOF'
 
-NixOS builds gluewc from the flake in this repository instead of installing
+NixOS builds gluemac from the flake in this repository instead of installing
 loose packages, so this script does not touch the system.
 
 To TRY it, without installing anything. These build the compositor and then
 start it: the screen is taken over until you quit with Super+Shift+Q, and
 nothing is left behind afterwards.
 
-  nix shell github:vladbiber/gluewc nixpkgs#alacritty nixpkgs#rofi \
-    -c gluewc-session
+  nix shell github:vladbiber/gluemac nixpkgs#alacritty nixpkgs#rofi \
+    -c gluemac-session
 
 The terminal and the launcher are named on purpose. The package deliberately
 does not carry them, and the compiled defaults bind Super+Q and Super+Return
 to alacritty and Super+Space to rofi, so without them you get a working but
 completely empty screen and no way to open anything. Two leaner variants:
 
-  nix run     github:vladbiber/gluewc                    # bare, no session
-  nix develop github:vladbiber/gluewc                    # a shell for make
+  nix run     github:vladbiber/gluemac                    # bare, no session
+  nix develop github:vladbiber/gluemac                    # a shell for make
 
 To INSTALL it, add the flake to your configuration and enable the module:
 
-  inputs.gluewc.url = "github:vladbiber/gluewc";
-  imports = [ inputs.gluewc.nixosModules.default ];
-  programs.gluewc.enable = true;              # session entry + PipeWire audio
-  programs.gluewc.bar.enable = true;          # the glueqs bar, autostarted
+  inputs.gluemac.url = "github:vladbiber/gluemac";
+  imports = [ inputs.gluemac.nixosModules.default ];
+  programs.gluemac.enable = true;              # session entry + PipeWire audio
+  programs.gluemac.bar.enable = true;          # the glueqs bar, autostarted
 
 docs/INSTALL.md has the full configuration.nix example. Inside a
 'nix develop' shell this script still works with --no-deps.
@@ -871,7 +871,7 @@ install_packages() {
 
 enable_audio() {
 	# Only systemd distributions have user units to enable; everywhere else
-	# gluewc-session starts the daemons itself when it finds them.
+	# gluemac-session starts the daemons itself when it finds them.
 	[ "$WITH_AUDIO" -eq 1 ] || return 0
 	command -v systemctl >/dev/null 2>&1 || return 0
 	if [ "$(id -u)" -eq 0 ]; then
@@ -883,7 +883,7 @@ enable_audio() {
 	systemctl --user daemon-reload >/dev/null 2>&1 || true
 	systemctl --user enable --now pipewire.socket pipewire-pulse.socket \
 		wireplumber.service >/dev/null 2>&1 \
-		|| warn "could not enable the PipeWire user units; gluewc-session starts them at login instead"
+		|| warn "could not enable the PipeWire user units; gluemac-session starts them at login instead"
 }
 
 # WirePlumber's default of switching Bluetooth headphones to the headset
@@ -895,11 +895,11 @@ stable_audio_config() {
 	[ "$WITH_AUDIO" -eq 1 ] || return 0
 	[ "$(id -u)" -ne 0 ] || return 0
 	dir=${XDG_CONFIG_HOME:-$HOME/.config}/wireplumber/wireplumber.conf.d
-	file=$dir/50-gluewc-stable-audio.conf
+	file=$dir/50-gluemac-stable-audio.conf
 	[ -e "$file" ] && return 0
 	mkdir -p "$dir"
 	cat >"$file" <<'CONF'
-# Written by gluewc's install.sh. Delete this file to go back to the defaults.
+# Written by gluemac's install.sh. Delete this file to go back to the defaults.
 # Do not drop Bluetooth headphones to the headset (HSP/HFP) profile whenever an
 # application opens the microphone: it turns the music into mono telephone
 # audio and it rarely switches back on its own.
@@ -949,10 +949,10 @@ check_source_requirements() {
 	pc_at_least wayland-protocols 1.47 || die "wayland-protocols >= 1.47 is required to build wlroots 0.20"
 }
 
-WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/gluewc-install.XXXXXX")
+WORKDIR=$(mktemp -d "${TMPDIR:-/tmp}/gluemac-install.XXXXXX")
 
 # SceneFX's headers use glibc's __always_inline, which musl does not define;
-# Chimera and Alpine get it spelled out for the SceneFX build and for gluewc,
+# Chimera and Alpine get it spelled out for the SceneFX build and for gluemac,
 # which includes those headers.
 EXTRA_CFLAGS=
 if ls /lib/ld-musl-*.so.1 >/dev/null 2>&1; then
@@ -1004,29 +1004,29 @@ fi
 if [ -n "$SELF_DIR" ] && [ -f "$SELF_DIR/Makefile" ]; then
 	SOURCE_DIR=$SELF_DIR
 else
-	log "Downloading gluewc ${REPO_REF}"
-	git clone --quiet --depth 1 --branch "$REPO_REF" "$REPO_URL" "$WORKDIR/gluewc"
-	SOURCE_DIR=$WORKDIR/gluewc
+	log "Downloading gluemac ${REPO_REF}"
+	git clone --quiet --depth 1 --branch "$REPO_REF" "$REPO_URL" "$WORKDIR/gluemac"
+	SOURCE_DIR=$WORKDIR/gluemac
 fi
 
 JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf '2')
 RPATH_FLAGS="-Wl,-rpath,$PREFIX/lib -Wl,-rpath,$PREFIX/lib64"
 
-log "Building gluewc"
+log "Building gluemac"
 "$MAKE" -C "$SOURCE_DIR" clean
 "$MAKE" -C "$SOURCE_DIR" -j"$JOBS" PREFIX="$PREFIX" SESSIONDIR="$SESSIONDIR" \
 	LDFLAGS="$RPATH_FLAGS" CFLAGS="$EXTRA_CFLAGS"
 
-log "Installing gluewc to $PREFIX"
+log "Installing gluemac to $PREFIX"
 run_install "$MAKE" -C "$SOURCE_DIR" install PREFIX="$PREFIX" \
 	SESSIONDIR="$SESSIONDIR" DESTDIR="$DESTDIR" LDFLAGS="$RPATH_FLAGS" \
 	CFLAGS="$EXTRA_CFLAGS"
 
 if [ "$UPDATE" -eq 1 ]; then
-	printf '\n\033[1;32mgluewc is up to date.\033[0m Log out and back in to run the new build.\n'
+	printf '\n\033[1;32mgluemac is up to date.\033[0m Log out and back in to run the new build.\n'
 else
-	printf '\n\033[1;32mgluewc is installed.\033[0m Log out, select gluewc in your display manager, and log in.\n'
-	printf 'TTY users can start it with: gluewc-session\n'
+	printf '\n\033[1;32mgluemac is installed.\033[0m Log out, select gluemac in your display manager, and log in.\n'
+	printf 'TTY users can start it with: gluemac-session\n'
 fi
 
 if [ "$WITH_BAR" -eq 1 ]; then

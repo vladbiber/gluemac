@@ -4,7 +4,7 @@
                         ((hex >> 8) & 0xFF) / 255.0f, \
                         (hex & 0xFF) / 255.0f }
 /* appearance - the non-const values can be overridden at runtime from
- * ~/.config/gluewc/config.conf */
+ * ~/.config/gluemac/config.conf */
 static const int sloppyfocus               = 1;  /* focus follows mouse */
 static int warpcursor                      = 1;  /* warp cursor to focused window on keyboard focus, like nvwm */
 static const int bypass_surface_visibility = 0;  /* 1 means idle inhibitors will disable idle tracking even if it's surface isn't visible  */
@@ -136,7 +136,7 @@ static const enum libinput_config_tap_button_map button_map = LIBINPUT_CONFIG_TA
 
 /* Volume is driven by whichever helper is installed: wpctl comes with
  * WirePlumber and is there on any PipeWire system, pactl with the PulseAudio
- * tools. The backlight goes through gluewc-backlight, which wraps
+ * tools. The backlight goes through gluemac-backlight, which wraps
  * brightnessctl or light and steps 5% down to 10%, then 1% down to 0. */
 #define VOLCMD(wp, pa) SHCMD("if command -v wpctl >/dev/null 2>&1; then " \
 	"wpctl " wp "; else pactl " pa "; fi")
@@ -144,14 +144,14 @@ static const enum libinput_config_tap_button_map button_map = LIBINPUT_CONFIG_TA
 #define VOLDOWN VOLCMD("set-volume @DEFAULT_AUDIO_SINK@ 5%-", "set-sink-volume @DEFAULT_SINK@ -5%")
 #define VOLMUTE VOLCMD("set-mute @DEFAULT_AUDIO_SINK@ toggle", "set-sink-mute @DEFAULT_SINK@ toggle")
 #define MICMUTE VOLCMD("set-mute @DEFAULT_AUDIO_SOURCE@ toggle", "set-source-mute @DEFAULT_SOURCE@ toggle")
-#define BRTUP   SHCMD("gluewc-backlight up")
-#define BRTDOWN SHCMD("gluewc-backlight down")
+#define BRTUP   SHCMD("gluemac-backlight up")
+#define BRTDOWN SHCMD("gluemac-backlight down")
 
 /* Screenshots. grim takes the picture, slurp draws the crop rectangle and
  * wl-copy puts it on the clipboard. slurp exits non-zero when the selection
  * is cancelled with Escape, which is what stops the shot from being taken. */
 #define SHOTDIR "${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots"
-#define SHOTNAME SHOTDIR "/gluewc-$(date +%Y%m%d-%H%M%S).png"
+#define SHOTNAME SHOTDIR "/gluemac-$(date +%Y%m%d-%H%M%S).png"
 #define SHOTFULL SHCMD("mkdir -p " SHOTDIR " && grim " SHOTNAME)
 #define SHOTAREA SHCMD("box=$(slurp) || exit 0; mkdir -p " SHOTDIR \
 	" && grim -g \"$box\" " SHOTNAME)

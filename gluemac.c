@@ -667,7 +667,7 @@ static int locked;
 static int inputmode = ModeInsert;
 static int decorhidden;
 
-/* runtime configuration (~/.config/gluewc/config.conf) */
+/* runtime configuration (~/.config/gluemac/config.conf) */
 static Bind *runkeys, *runnormalkeys;
 static size_t nrunkeys, nrunnormalkeys;
 static char **autostarts;
@@ -5406,7 +5406,7 @@ handlecrash(int signo)
 	 * of those from here: write(), signal() and raise() are async-signal-safe.
 	 * The session wrapper records the resulting exit status, while the reset
 	 * disposition below lets the kernel produce the actual core dump. */
-	static const char msg[] = "gluewc: fatal signal; core dump follows\n";
+	static const char msg[] = "gluemac: fatal signal; core dump follows\n";
 	if (write(STDERR_FILENO, msg, sizeof(msg) - 1) < 0)
 		{}
 	signal(signo, SIG_DFL);
@@ -5434,7 +5434,7 @@ inputdevice(struct wl_listener *listener, void *data)
 	}
 
 	/* We need to let the wlr_seat know what our capabilities are, which is
-	 * communiciated to the client. In gluewc we always have a cursor, even if
+	 * communiciated to the client. In gluemac we always have a cursor, even if
 	 * there are no pointer devices, so we always include that capability. */
 	/* TODO do we actually require a cursor? */
 	caps = WL_SEAT_CAPABILITY_POINTER;
@@ -7108,7 +7108,7 @@ maximizenotify(struct wl_listener *listener, void *data)
 {
 	/* This event is raised when a client would like to maximize itself,
 	 * typically because the user clicked on the maximize button on
-	 * client-side decorations. gluewc does not support maximization, but
+	 * client-side decorations. gluemac does not support maximization, but
 	 * to conform to xdg-shell protocol we still must send a configure.
 	 * Since xdg-shell protocol v5 we should ignore request of unsupported
 	 * capabilities, just schedule a empty configure when the client uses <5
@@ -7828,7 +7828,7 @@ run(char *startup_cmd)
 	}
 
 	/* Mark stdout as non-blocking to avoid the startup script
-	 * causing gluewc to freeze when a user neither closes stdin
+	 * causing gluemac to freeze when a user neither closes stdin
 	 * nor consumes standard input in his startup script */
 
 	if (fd_set_nonblock(STDOUT_FILENO) < 0)
@@ -7998,7 +7998,7 @@ setpsel(struct wl_listener *listener, void *data)
 {
 	/* This event is raised by the seat when a client wants to set the selection,
 	 * usually when the user copies something. wlroots allows compositors to
-	 * ignore such requests if they so choose, but in gluewc we always honor them
+	 * ignore such requests if they so choose, but in gluemac we always honor them
 	 */
 	struct wlr_seat_request_set_primary_selection_event *event = data;
 	wlr_seat_set_primary_selection(seat, event->source, event->serial);
@@ -8009,7 +8009,7 @@ setsel(struct wl_listener *listener, void *data)
 {
 	/* This event is raised by the seat when a client wants to set the selection,
 	 * usually when the user copies something. wlroots allows compositors to
-	 * ignore such requests if they so choose, but in gluewc we always honor them
+	 * ignore such requests if they so choose, but in gluemac we always honor them
 	 */
 	struct wlr_seat_request_set_selection_event *event = data;
 	wlr_seat_set_selection(seat, event->source, event->serial);
@@ -8667,7 +8667,7 @@ cfgerrorshow(void)
 		}
 	}
 	snprintf(cmd, sizeof cmd, "command -v notify-send >/dev/null 2>&1 && "
-			"notify-send -u critical 'gluewc: %d config error%s' "
+			"notify-send -u critical 'gluemac: %d config error%s' "
 			"'line %d: %s'", cfg_nerrors, cfg_nerrors > 1 ? "s" : "",
 			cfg_errline, cfg_errmsg);
 	spawn(&a);
@@ -8772,9 +8772,9 @@ layoutstatepath(char *buf, size_t size)
 	const char *env;
 
 	if ((env = getenv("XDG_STATE_HOME")) && *env)
-		snprintf(buf, size, "%s/gluewc", env);
+		snprintf(buf, size, "%s/gluemac", env);
 	else if ((env = getenv("HOME")) && *env)
-		snprintf(buf, size, "%s/.local/state/gluewc", env);
+		snprintf(buf, size, "%s/.local/state/gluemac", env);
 	else
 		return 0;
 	return 1;
@@ -8831,7 +8831,7 @@ void
 saveoverviewstate(int active)
 {
 	/* published so the shell can put a dock on screen while the overview is
-	 * up; no other compositor writes this, so the dock stays gluewc-only */
+	 * up; no other compositor writes this, so the dock stays gluemac-only */
 	char path[600], dir[512];
 	FILE *f;
 
@@ -8878,9 +8878,9 @@ readconfig(void)
 	noutcfgs = 0;
 
 	if ((env = getenv("XDG_CONFIG_HOME")))
-		snprintf(path, sizeof path, "%s/gluewc/config.conf", env);
+		snprintf(path, sizeof path, "%s/gluemac/config.conf", env);
 	else if ((env = getenv("HOME")))
-		snprintf(path, sizeof path, "%s/.config/gluewc/config.conf", env);
+		snprintf(path, sizeof path, "%s/.config/gluemac/config.conf", env);
 	else
 		return;
 	snprintf(cfg_path, sizeof cfg_path, "%s", path);
@@ -9283,7 +9283,7 @@ setup(void)
 void
 childdie(const char *what, const char *cmd)
 {
-	fprintf(stderr, "gluewc: %s %s failed: ", what, cmd);
+	fprintf(stderr, "gluemac: %s %s failed: ", what, cmd);
 	perror(NULL);
 	_exit(1);
 }
@@ -9856,7 +9856,7 @@ updatemons(struct wl_listener *listener, void *data)
 	wlr_scene_node_set_position(&root_bg->node, sgeom.x, sgeom.y);
 	wlr_scene_rect_set_size(root_bg, sgeom.width, sgeom.height);
 
-	/* Make sure the clients are hidden when gluewc is locked */
+	/* Make sure the clients are hidden when gluemac is locked */
 	wlr_scene_node_set_position(&locked_bg->node, sgeom.x, sgeom.y);
 	wlr_scene_rect_set_size(locked_bg, sgeom.width, sgeom.height);
 
@@ -10095,7 +10095,7 @@ xwaylandready(struct wl_listener *listener, void *data)
 	/* assign the one and only seat */
 	wlr_xwayland_set_seat(xwayland, seat);
 
-	/* Set the default XWayland cursor to match the rest of gluewc. */
+	/* Set the default XWayland cursor to match the rest of gluemac. */
 	if ((xcursor = wlr_xcursor_manager_get_xcursor(cursor_mgr, "default", 1)))
 		wlr_xwayland_set_cursor(xwayland,
 				wlr_xcursor_image_get_buffer(xcursor->images[0]),
@@ -10115,7 +10115,7 @@ main(int argc, char *argv[])
 		else if (c == 'd')
 			log_level = WLR_DEBUG;
 		else if (c == 'v')
-			die("gluewc " VERSION);
+			die("gluemac " VERSION);
 		else
 			goto usage;
 	}

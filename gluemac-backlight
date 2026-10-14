@@ -1,11 +1,11 @@
 #!/bin/sh
-# gluewc-backlight: step the backlight up or down on a ladder that is fine at
+# gluemac-backlight: step the backlight up or down on a ladder that is fine at
 # the bottom and coarse above it: 0 1 2 ... 10 15 20 ... 100. A plain 5% step
 # can never reach 0 and jumps too far when the room is dark. Uses brightnessctl
 # when it is installed and light otherwise. Some panels (NVIDIA backlight on
 # MUX laptops) stay lit at 0, so 0 also powers the built-in panel off.
 
-usage() { printf 'usage: gluewc-backlight up|down\n' >&2; exit 2; }
+usage() { printf 'usage: gluemac-backlight up|down\n' >&2; exit 2; }
 [ $# -eq 1 ] || usage
 case $1 in up|down) ;; *) usage ;; esac
 
@@ -16,11 +16,11 @@ elif command -v light >/dev/null 2>&1; then
 	get() { light -G | awk '{ printf "%d 100\n", $1 + 0.5 }'; }
 	put() { light -S "$1"; }
 else
-	printf 'gluewc-backlight: neither brightnessctl nor light is installed\n' >&2
+	printf 'gluemac-backlight: neither brightnessctl nor light is installed\n' >&2
 	exit 1
 fi
 
-# built-in panel as gluewc names it: card1-eDP-1 -> eDP-1
+# built-in panel as gluemac names it: card1-eDP-1 -> eDP-1
 panel() {
 	for c in /sys/class/drm/card*-eDP-* /sys/class/drm/card*-LVDS-* /sys/class/drm/card*-DSI-*; do
 		[ "$(cat "$c/status" 2>/dev/null)" = connected ] || continue
@@ -30,9 +30,9 @@ panel() {
 	done
 }
 power() {
-	command -v gluewc-msg >/dev/null 2>&1 && [ -n "$WAYLAND_DISPLAY" ] || return 0
+	command -v gluemac-msg >/dev/null 2>&1 && [ -n "$WAYLAND_DISPLAY" ] || return 0
 	p=$(panel)
-	[ -n "$p" ] && gluewc-msg -o "$p" power "$1" 2>/dev/null
+	[ -n "$p" ] && gluemac-msg -o "$p" power "$1" 2>/dev/null
 }
 
 set -- "$1" $(get)

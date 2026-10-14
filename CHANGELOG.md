@@ -14,17 +14,17 @@
   version check no longer flags the noctalia-qs fork. `--update` rebuilds a
   Quickshell built here when Qt moved under it
 - Chimera Linux: recognised as its own family (clang, musl, `gmake`, dinit,
-  `doas`), with wlroots 0.20 from its repositories and SceneFX, gluewc and
+  `doas`), with wlroots 0.20 from its repositories and SceneFX, gluemac and
   Quickshell built on top. `foot` and `wmenu` stand in for alacritty and rofi,
   which Chimera does not package, and a config seeded by the installer is
   pointed at them
 - The installer installs a terminal and a launcher (alacritty and rofi) with
   the compositor, since the compiled defaults open them and a session without
   them is an empty screen; `doas` and `run0` work where there is no `sudo`
-- NixOS and finix: `programs.gluewc.bar.enable` installs `glueqs` (the QML tree
+- NixOS and finix: `programs.gluemac.bar.enable` installs `glueqs` (the QML tree
   packaged from this flake's `glueqs` input, run by the Quickshell in nixpkgs),
   the tools its panels use, Bluetooth and UPower, and seeds new accounts with
-  `autostart = glueqs`. `packages.glueqs` and `packages.gluewc-with-bar` are
+  `autostart = glueqs`. `packages.glueqs` and `packages.gluemac-with-bar` are
   exposed too
 - Monitors are configured from the config file and applied live: `output =
   NAME mode=... pos=... scale=... transform=... enabled=... mirror=...`, with
@@ -34,8 +34,8 @@
   scale, has no workspaces or windows, and closes its own bar while it copies.
   `output = * mirror=eDP-1` is the one-line "same picture everywhere". The
   current state of every output, modes included, is written to
-  `$XDG_STATE_HOME/gluewc/outputs` and printed by `gluewc-msg outputs`
-- `gluewc-backlight up|down`, now behind the brightness keys: 5% steps down to
+  `$XDG_STATE_HOME/gluemac/outputs` and printed by `gluemac-msg outputs`
+- `gluemac-backlight up|down`, now behind the brightness keys: 5% steps down to
   10%, then 1% steps to 0, so the backlight can go all the way off and does
   not jump in the dark. It wraps `brightnessctl` or `light` and keeps stepping
   on panels whose levels are coarser than 1%
@@ -61,19 +61,19 @@
   left it goes on to the workspace that lies that way (up/down in the scroll
   layout, left/right elsewhere). `wm:move_to_workspace_*` stay for the second
   half on its own
-- `gluewc-msg`, a dwl-ipc client (`status`, `workspace N`, `move N`, `layout
-  NAME`, `quit`, `-o OUTPUT`), and `$XDG_STATE_HOME/gluewc/workspaces`, one
+- `gluemac-msg`, a dwl-ipc client (`status`, `workspace N`, `move N`, `layout
+  NAME`, `quit`, `-o OUTPUT`), and `$XDG_STATE_HOME/gluemac/workspaces`, one
   line per output with the active workspace and the window counts, written on
   every change. Together they give a bar without a dwl-ipc module — upstream
   quickshell, a script — the workspaces; glueqs uses them now, so it no longer
   needs the `Quickshell.DWL` module that only the noctalia-qs fork carries
-- `gluewc-session` uses the user D-Bus bus that systemd or dbus-broker already
+- `gluemac-session` uses the user D-Bus bus that systemd or dbus-broker already
   runs instead of starting a second one with `dbus-run-session` (which split
   the desktop in two on Arch: portals and PipeWire on one bus, the apps on the
   other), starts audio through the systemd user units where there are any
   instead of next to them, and elsewhere starts PipeWire, WirePlumber and
   pipewire-pulse in order and restarts one that dies, with their output in
-  `~/.local/state/gluewc-audio.log`. `dbus-update-activation-environment` is
+  `~/.local/state/gluemac-audio.log`. `dbus-update-activation-environment` is
   called with `--systemd` so bus-activated services under systemd see the
   display too
 - `install.sh` installs `xdg-desktop-portal` and `xdg-desktop-portal-wlr`
@@ -97,7 +97,7 @@
   one deliberately pointed elsewhere is not reported missing; `autostart` is
   left out. `--check-config` prints the list on its own
 - `install.sh --with-bar` sets up glueqs, the quickshell bar written for
-  gluewc: the package where the distribution has one, a clone or pull of the
+  gluemac: the package where the distribution has one, a clone or pull of the
   bar into `~/.config/quickshell/glueqs`, and a single `autostart = qs -c
   glueqs` line. quickshell is missing from Alpine and older Fedora, Debian and
   Ubuntu, so that step is allowed to fail — the bar is configured either way
@@ -149,7 +149,7 @@
 - The volume and backlight commands pick the helper that is installed instead
   of insisting on one: `wpctl`, which ships with WirePlumber, before `pactl`,
   and `brightnessctl` before `light`
-- Saving the config applies it: `~/.config/gluewc/config.conf` is watched and
+- Saving the config applies it: `~/.config/gluemac/config.conf` is watched and
   reloaded on the spot, including when an editor writes a temporary file and
   renames it over the original
 - A line the config parser rejects is reported rather than only logged: a red
@@ -157,7 +157,7 @@
   line, and a log entry with its number. Everything that did parse still
   applies, so a typo cannot leave the session without keybinds
 - NixOS support through a flake: a package, an overlay, a `nix develop` shell
-  and a `programs.gluewc` NixOS module that registers the session with the
+  and a `programs.gluemac` NixOS module that registers the session with the
   display manager and sets up PipeWire, the portals and Xwayland
 - The installer sets up sound as well: PipeWire, WirePlumber and the ALSA and
   PulseAudio bridges are installed with the build dependencies and their user
@@ -174,9 +174,9 @@
 - The drift camera pan moved from `Super+Ctrl+Arrow` to `Super+Alt+Arrow` to
   make room for the workspace move. In the BSP and scroll layouts that
   binding still swaps windows, which `Super+Shift+Arrow` already did
-- gluewc now builds against wlroots 0.20 and SceneFX 0.5. The two move
+- gluemac now builds against wlroots 0.20 and SceneFX 0.5. The two move
   together: SceneFX 0.5 requires wlroots 0.20, and neither is compatible with
-  the 0.19/0.4 pair gluewc used before
+  the 0.19/0.4 pair gluemac used before
 - Rounded corners now go through the SceneFX 0.5 corner API: the corner
   location enum was replaced by a four-value `fx_corner_radii`, so each corner
   carries its own radius. The rendered result is unchanged
@@ -193,9 +193,9 @@
 
 - Mod-F1 to Mod-F3 replace the bare F1 to F3 media binds in insert mode, which
   gives applications their function keys back
-- `gluewc-session` looks for its default config next to its own prefix, and
-  honours `GLUEWC_DATADIR`, so a custom `--prefix` and a Nix store path seed
-  `~/.config/gluewc/config.conf` like a distribution install does
+- `gluemac-session` looks for its default config next to its own prefix, and
+  honours `GLUEMAC_DATADIR`, so a custom `--prefix` and a Nix store path seed
+  `~/.config/gluemac/config.conf` like a distribution install does
 - BSP direct manipulation: Mod-drag no longer tears a tiled window out into a
   float, it hands the window the tile it is dropped on and the two trade
   places in the tree; Mod-right-drag moves the splits the window sits between
@@ -219,7 +219,7 @@
   asking pkg-config where wayland-scanner lives returned nothing and make ran
   `enum-header` as a command. The scanner is on `PATH` already, so a makeFlag
   names it
-- `flake.lock` is committed. Without it `nix run github:vladbiber/gluewc` could
+- `flake.lock` is committed. Without it `nix run github:vladbiber/gluemac` could
   not start at all: an unlocked input has to be locked before evaluation, and a
   flake fetched from GitHub lives in the read-only store
 - The flake instructions no longer read like installation steps. `nix run`
@@ -308,7 +308,7 @@
   plain mouse can move around a canvas that windows cover; the wheel only
   pans over bare canvas and the three-finger swipe needs a touchpad
 - The active layout is remembered between sessions in
-  `$XDG_STATE_HOME/gluewc/layout` (`remember_layout` turns it off)
+  `$XDG_STATE_HOME/gluemac/layout` (`remember_layout` turns it off)
 - Four-finger gestures for workspaces and the overview in every layout, plus a
   four-finger pinch for the overview
 - `layout`, `drift_snap`, `drift_nudge`, `drift_zoom_min`, `drift_zoom_max`,
@@ -358,7 +358,7 @@
 
 ## 0.1.0 — 2026-08-15
 
-Initial gluewc release.
+Initial gluemac release.
 
 ### Added
 
@@ -378,5 +378,5 @@ Initial gluewc release.
 
 ### Based on
 
-gluewc started from dwl 0.8. The repository retains the upstream Git history
+gluemac started from dwl 0.8. The repository retains the upstream Git history
 and the complete license notices.

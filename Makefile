@@ -4,34 +4,34 @@
 include config.mk
 
 # flags for compiling
-GLUEWCCPPFLAGS = -I. -DWLR_USE_UNSTABLE -D_POSIX_C_SOURCE=200809L \
+GLUEMACCPPFLAGS = -I. -DWLR_USE_UNSTABLE -D_POSIX_C_SOURCE=200809L \
 	-DVERSION=\"$(VERSION)\" $(XWAYLAND)
-GLUEWCDEVCFLAGS = -g -Wpedantic -Wall -Wextra -Wdeclaration-after-statement \
+GLUEMACDEVCFLAGS = -g -Wpedantic -Wall -Wextra -Wdeclaration-after-statement \
 	-Wno-unused-parameter -Wshadow -Wunused-macros -Werror=strict-prototypes \
 	-Werror=implicit -Werror=return-type -Werror=incompatible-pointer-types \
 	-Wfloat-conversion
 
 # CFLAGS / LDFLAGS
 PKGS      = wayland-server xkbcommon libinput $(XLIBS)
-GLUEWCCFLAGS = `$(PKG_CONFIG) --cflags $(PKGS)` $(SCENEFX_INCS) $(WLR_INCS) $(GLUEWCCPPFLAGS) $(GLUEWCDEVCFLAGS) $(CFLAGS)
+GLUEMACCFLAGS = `$(PKG_CONFIG) --cflags $(PKGS)` $(SCENEFX_INCS) $(WLR_INCS) $(GLUEMACCPPFLAGS) $(GLUEMACDEVCFLAGS) $(CFLAGS)
 LDLIBS    = `$(PKG_CONFIG) --libs $(PKGS)` $(SCENEFX_LIBS) $(WLR_LIBS) -lm $(LIBS)
-# gluewc-msg is a plain Wayland client
-MSGCFLAGS = `$(PKG_CONFIG) --cflags wayland-client` -I. $(GLUEWCDEVCFLAGS) $(CFLAGS)
+# gluemac-msg is a plain Wayland client
+MSGCFLAGS = `$(PKG_CONFIG) --cflags wayland-client` -I. $(GLUEMACDEVCFLAGS) $(CFLAGS)
 MSGLIBS   = `$(PKG_CONFIG) --libs wayland-client` $(LIBS)
 
-all: gluewc gluewc-msg
+all: gluemac gluemac-msg
 
-check: gluewc
-	sh -n install.sh gluewc-session gluewc-backlight tests/drm-test.sh
+check: gluemac
+	sh -n install.sh gluemac-session gluemac-backlight tests/drm-test.sh
 	$(MAKE) -C tests
-gluewc: gluewc.o util.o dwl-ipc-unstable-v2-protocol.o
-	$(CC) gluewc.o util.o dwl-ipc-unstable-v2-protocol.o $(GLUEWCCFLAGS) $(LDFLAGS) $(LDLIBS) -o $@
-gluewc-msg: gluewc-msg.o dwl-ipc-unstable-v2-protocol.o wlr-output-power-management-unstable-v1-protocol.o
-	$(CC) gluewc-msg.o dwl-ipc-unstable-v2-protocol.o wlr-output-power-management-unstable-v1-protocol.o $(MSGCFLAGS) $(LDFLAGS) $(MSGLIBS) -o $@
-gluewc-msg.o: gluewc-msg.c dwl-ipc-unstable-v2-client-protocol.h \
+gluemac: gluemac.o util.o dwl-ipc-unstable-v2-protocol.o
+	$(CC) gluemac.o util.o dwl-ipc-unstable-v2-protocol.o $(GLUEMACCFLAGS) $(LDFLAGS) $(LDLIBS) -o $@
+gluemac-msg: gluemac-msg.o dwl-ipc-unstable-v2-protocol.o wlr-output-power-management-unstable-v1-protocol.o
+	$(CC) gluemac-msg.o dwl-ipc-unstable-v2-protocol.o wlr-output-power-management-unstable-v1-protocol.o $(MSGCFLAGS) $(LDFLAGS) $(MSGLIBS) -o $@
+gluemac-msg.o: gluemac-msg.c dwl-ipc-unstable-v2-client-protocol.h \
 	wlr-output-power-management-unstable-v1-client-protocol.h
-	$(CC) $(CPPFLAGS) $(MSGCFLAGS) -o $@ -c gluewc-msg.c
-gluewc.o: gluewc.c client.h config.h config.mk cursor-shape-v1-protocol.h \
+	$(CC) $(CPPFLAGS) $(MSGCFLAGS) -o $@ -c gluemac-msg.c
+gluemac.o: gluemac.c client.h config.h config.mk cursor-shape-v1-protocol.h \
 	dwl-ipc-unstable-v2-protocol.h \
 	pointer-constraints-unstable-v1-protocol.h wlr-layer-shell-unstable-v1-protocol.h \
 	wlr-output-power-management-unstable-v1-protocol.h xdg-shell-protocol.h
@@ -80,50 +80,50 @@ dwl-ipc-unstable-v2-client-protocol.h:
 config.h:
 	cp config.def.h $@
 clean:
-	rm -f gluewc gluewc-msg *.o *-protocol.h *-protocol.c
+	rm -f gluemac gluemac-msg *.o *-protocol.h *-protocol.c
 
 dist: clean
-	mkdir -p gluewc-$(VERSION)
+	mkdir -p gluemac-$(VERSION)
 	cp -R .github docs LICENSE* Makefile CHANGELOG.md CONTRIBUTING.md \
 		README.md SECURITY.md install.sh flake.nix client.h config.def.h \
-		config.def.conf config.mk protocols gluewc.1 gluewc.c gluewc-msg.c \
-		util.c util.h gluewc.desktop gluewc-session gluewc-backlight gluewc-$(VERSION)
-	tar -caf gluewc-$(VERSION).tar.gz gluewc-$(VERSION)
-	rm -rf gluewc-$(VERSION)
+		config.def.conf config.mk protocols gluemac.1 gluemac.c gluemac-msg.c \
+		util.c util.h gluemac.desktop gluemac-session gluemac-backlight gluemac-$(VERSION)
+	tar -caf gluemac-$(VERSION).tar.gz gluemac-$(VERSION)
+	rm -rf gluemac-$(VERSION)
 
-install: gluewc gluewc-msg
+install: gluemac gluemac-msg
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	rm -f $(DESTDIR)$(PREFIX)/bin/gluewc $(DESTDIR)$(PREFIX)/bin/gluewc-msg
-	cp -f gluewc $(DESTDIR)$(PREFIX)/bin
-	chmod 755 $(DESTDIR)$(PREFIX)/bin/gluewc
-	cp -f gluewc-msg $(DESTDIR)$(PREFIX)/bin
-	chmod 755 $(DESTDIR)$(PREFIX)/bin/gluewc-msg
-	cp -f gluewc-session $(DESTDIR)$(PREFIX)/bin
-	chmod 755 $(DESTDIR)$(PREFIX)/bin/gluewc-session
-	cp -f gluewc-backlight $(DESTDIR)$(PREFIX)/bin
-	chmod 755 $(DESTDIR)$(PREFIX)/bin/gluewc-backlight
+	rm -f $(DESTDIR)$(PREFIX)/bin/gluemac $(DESTDIR)$(PREFIX)/bin/gluemac-msg
+	cp -f gluemac $(DESTDIR)$(PREFIX)/bin
+	chmod 755 $(DESTDIR)$(PREFIX)/bin/gluemac
+	cp -f gluemac-msg $(DESTDIR)$(PREFIX)/bin
+	chmod 755 $(DESTDIR)$(PREFIX)/bin/gluemac-msg
+	cp -f gluemac-session $(DESTDIR)$(PREFIX)/bin
+	chmod 755 $(DESTDIR)$(PREFIX)/bin/gluemac-session
+	cp -f gluemac-backlight $(DESTDIR)$(PREFIX)/bin
+	chmod 755 $(DESTDIR)$(PREFIX)/bin/gluemac-backlight
 	mkdir -p $(DESTDIR)$(MANDIR)/man1
-	cp -f gluewc.1 $(DESTDIR)$(MANDIR)/man1
-	chmod 644 $(DESTDIR)$(MANDIR)/man1/gluewc.1
-	mkdir -p $(DESTDIR)$(DATADIR)/gluewc
-	cp -f config.def.conf $(DESTDIR)$(DATADIR)/gluewc/config.def.conf
-	chmod 644 $(DESTDIR)$(DATADIR)/gluewc/config.def.conf
-	mkdir -p $(DESTDIR)$(DATADIR)/doc/gluewc
-	cp -f README.md CONTRIBUTING.md SECURITY.md $(DESTDIR)$(DATADIR)/doc/gluewc
-	cp -R docs $(DESTDIR)$(DATADIR)/doc/gluewc
+	cp -f gluemac.1 $(DESTDIR)$(MANDIR)/man1
+	chmod 644 $(DESTDIR)$(MANDIR)/man1/gluemac.1
+	mkdir -p $(DESTDIR)$(DATADIR)/gluemac
+	cp -f config.def.conf $(DESTDIR)$(DATADIR)/gluemac/config.def.conf
+	chmod 644 $(DESTDIR)$(DATADIR)/gluemac/config.def.conf
+	mkdir -p $(DESTDIR)$(DATADIR)/doc/gluemac
+	cp -f README.md CONTRIBUTING.md SECURITY.md $(DESTDIR)$(DATADIR)/doc/gluemac
+	cp -R docs $(DESTDIR)$(DATADIR)/doc/gluemac
 	mkdir -p $(DESTDIR)$(SESSIONDIR)
-	cp -f gluewc.desktop $(DESTDIR)$(SESSIONDIR)/gluewc.desktop
-	chmod 644 $(DESTDIR)$(SESSIONDIR)/gluewc.desktop
+	cp -f gluemac.desktop $(DESTDIR)$(SESSIONDIR)/gluemac.desktop
+	chmod 644 $(DESTDIR)$(SESSIONDIR)/gluemac.desktop
 	sync
 uninstall:
-	rm -f $(DESTDIR)$(PREFIX)/bin/gluewc $(DESTDIR)$(PREFIX)/bin/gluewc-session \
-		$(DESTDIR)$(PREFIX)/bin/gluewc-msg $(DESTDIR)$(MANDIR)/man1/gluewc.1 \
-		$(DESTDIR)$(DATADIR)/gluewc/config.def.conf \
-		$(DESTDIR)$(SESSIONDIR)/gluewc.desktop
-	rm -rf $(DESTDIR)$(DATADIR)/doc/gluewc
+	rm -f $(DESTDIR)$(PREFIX)/bin/gluemac $(DESTDIR)$(PREFIX)/bin/gluemac-session \
+		$(DESTDIR)$(PREFIX)/bin/gluemac-msg $(DESTDIR)$(MANDIR)/man1/gluemac.1 \
+		$(DESTDIR)$(DATADIR)/gluemac/config.def.conf \
+		$(DESTDIR)$(SESSIONDIR)/gluemac.desktop
+	rm -rf $(DESTDIR)$(DATADIR)/doc/gluemac
 
 .PHONY: all check clean dist install uninstall
 
 .SUFFIXES: .c .o
 .c.o:
-	$(CC) $(CPPFLAGS) $(GLUEWCCFLAGS) -o $@ -c $<
+	$(CC) $(CPPFLAGS) $(GLUEMACCFLAGS) -o $@ -c $<

@@ -2,7 +2,7 @@
 
 Bug reports and focused pull requests are welcome. For input, output or session
 crashes, include the GPU, distribution, wlroots/SceneFX versions and the end of
-`~/.local/state/gluewc.log`.
+`~/.local/state/gluemac.log`.
 
 Before submitting code:
 

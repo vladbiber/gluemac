@@ -1,6 +1,6 @@
 # Configuration
 
-gluewc reads `~/.config/gluewc/config.conf`. The installed session creates it
+gluemac reads `~/.config/gluemac/config.conf`. The installed session creates it
 from `config.def.conf` on first login.
 
 ## Saving applies
@@ -15,13 +15,13 @@ mount.
 
 A line the parser rejects is skipped, and everything that did parse still
 applies — a typo can never leave the session without keybinds. To make sure a
-mistake is not missed, gluewc reports it three ways:
+mistake is not missed, gluemac reports it three ways:
 
 - a red strip across the top of the screen for five seconds, which needs
   nothing installed,
 - a `notify-send` notification naming the line and what was wrong with it, when
   a notification daemon is running,
-- a line in `~/.local/state/gluewc.log`, always:
+- a line in `~/.local/state/gluemac.log`, always:
 
 ```text
 config:24: bad bind 'mod+NoSuchKey = spawn:true'
@@ -89,7 +89,7 @@ niri-style scroll layout and the driftwm-style drift canvas.
 | Setting | Value | Meaning |
 | --- | --- | --- |
 | `layout` | `bsp`, `scroll`, `drift` | layout every monitor starts in |
-| `remember_layout` | boolean | reopen in the layout the last session ended in (saved in `$XDG_STATE_HOME/gluewc/layout`), overriding `layout` |
+| `remember_layout` | boolean | reopen in the layout the last session ended in (saved in `$XDG_STATE_HOME/gluemac/layout`), overriding `layout` |
 | `drift_snap` | integer | drift: distance at which dragged edges snap, in canvas pixels |
 | `drift_nudge` | integer | drift: pixels a window moves per keyboard nudge |
 | `drift_zoom_min` | float | drift: how far the camera can zoom out |
@@ -122,7 +122,7 @@ autostart = swaybg -i ~/Pictures/wallpaper.jpg -m fill
 ```
 
 Wallpaper programs should use a background or bottom layer-shell surface.
-gluewc copies those layers into the overview, and a wallpaper that changes
+gluemac copies those layers into the overview, and a wallpaper that changes
 while the overview is up changes in the cards too. If none is running,
 `root_color` is shown. glueqs paints the wallpaper itself, so with it there
 is no wallpaper line at all.
@@ -145,7 +145,7 @@ Actions:
 | --- | --- |
 | `spawn:COMMAND` | run a shell command |
 | `macro:stop_all` | stop every macro and release synthetic keys/buttons |
-| `wm:quit` | quit gluewc |
+| `wm:quit` | quit gluemac |
 | `wm:reload` | reload the runtime config |
 | `wm:overview` | toggle overview |
 | `wm:toggle_opacity` | toggle configured window opacity |
@@ -203,7 +203,7 @@ items are XKB key combinations, `wait:MILLISECONDS`, or
 `press` controls how long a generated key or button stays down. Macro triggers
 take priority over ordinary compositor binds using the same combination.
 
-All macros stop when the session locks or the configuration reloads. gluewc
+All macros stop when the session locks or the configuration reloads. gluemac
 also releases any generated key or mouse button that was down at that moment.
 
 ## Media, volume and backlight
@@ -223,7 +223,7 @@ working as they always did, and normal mode has the same keys without `Super`.
 
 The commands pick the helper that is installed rather than insisting on one:
 `wpctl` (WirePlumber, present on any PipeWire system) before `pactl`. The
-backlight keys run `gluewc-backlight up|down`, a small script installed next
+backlight keys run `gluemac-backlight up|down`, a small script installed next
 to the compositor that wraps `brightnessctl` (or `light`) and walks the ladder
 0, 1, 2 ... 10, 15, 20 ... 100: 5% steps where the difference is barely
 visible, 1% steps in the dark, and 0 turns the panel off. Playback uses
@@ -317,7 +317,7 @@ output = DP-2 enabled=false
 ```
 
 The name is the one the monitor has on the wire (`eDP-1`, `DP-1`, `HDMI-A-1`);
-`gluewc-msg outputs` lists them. `*` stands for every output that has no line
+`gluemac-msg outputs` lists them. `*` stands for every output that has no line
 of its own, and a later line for the same name overrides the earlier one key
 by key.
 
@@ -355,8 +355,8 @@ source a fixed `pos` if the numbers matter.
 
 ### The outputs state file
 
-Whenever the layout changes gluewc rewrites `$XDG_STATE_HOME/gluewc/outputs`
-(`~/.local/state/gluewc/outputs`), one tab-separated line per output, on or
+Whenever the layout changes gluemac rewrites `$XDG_STATE_HOME/gluemac/outputs`
+(`~/.local/state/gluemac/outputs`), one tab-separated line per output, on or
 off:
 
 ```text
@@ -365,7 +365,7 @@ name=DP-1	enabled=1	x=0	y=0	w=1920	h=1080	pw=1920	ph=1080	hz=60.00	scale=1.00	tr
 
 `w`/`h` are the logical size after scale and transform, `pw`/`ph` the pixels of
 the current mode, `modes` every fixed mode the monitor offers, `mirror` the
-source it is copying right now. `gluewc-msg outputs` prints the file. The
+source it is copying right now. `gluemac-msg outputs` prints the file. The
 glueqs settings panel has a Monitors page built on it: it draws the layout,
 lets you drag screens around, pick modes and scales, mirror one or all, and
 writes the `output` lines above.
@@ -373,7 +373,7 @@ writes the `output` lines above.
 ## Bars and shells
 
 Layer-shell panels reserve their exclusive area automatically, including during
-overview transitions. gluewc advertises `dwl-ipc-unstable-v2` for workspace
+overview transitions. gluemac advertises `dwl-ipc-unstable-v2` for workspace
 modules and the foreign-toplevel protocol for window lists. A Waybar config can
-therefore use the `dwl/tags` module even though gluewc presents them as fixed
+therefore use the `dwl/tags` module even though gluemac presents them as fixed
 workspaces.

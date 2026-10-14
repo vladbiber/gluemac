@@ -1,4 +1,4 @@
-gluewc
+gluemac
 *.o
 *-protocol.c
 *-protocol.h
@@ -14,4 +14,4 @@ tests/*.ppm
 tests/wlpower
 tests/wlpower.c
 tests/wlr-output-power-management-unstable-v1.xml
-gluewc-msg
+gluemac-msg

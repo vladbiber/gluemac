@@ -3,11 +3,11 @@
 ## Automatic installer
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/vladbiber/gluewc/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/vladbiber/gluemac/main/install.sh | sh
 ```
 
 The script uses the native package manager, then checks for the exact pkg-config
-modules required by gluewc. Arch, Alpine and Void package wlroots 0.20; on every
+modules required by gluemac. Arch, Alpine and Void package wlroots 0.20; on every
 other distribution the installer builds wlroots 0.20.2 from source. No
 distribution packages SceneFX 0.5 yet, so that one is always built from source
 unless `scenefx-0.5` is already installed. Both libraries carry their version in
@@ -22,8 +22,8 @@ Useful modes:
 ./install.sh --dry-run       # show the package command
 ./install.sh --no-deps       # use dependencies already installed
 ./install.sh --no-audio      # skip PipeWire and friends
-./install.sh --deps-only     # prepare dependencies without installing gluewc
-./install.sh --prefix /opt/gluewc
+./install.sh --deps-only     # prepare dependencies without installing gluemac
+./install.sh --prefix /opt/gluemac
 ./install.sh --uninstall
 ```
 
@@ -32,7 +32,7 @@ Useful modes:
 `--update` pulls the checkout it is run from, hands over to the freshly pulled
 script, rebuilds and installs. `--update --no-deps` skips the package manager
 and goes straight to the rebuild, which is what you want when nothing but
-gluewc itself has changed.
+gluemac itself has changed.
 
 Nothing in `~/.config` is rewritten. Instead, every install and update ends
 with a list of the settings and bindings the shipped defaults have that your
@@ -45,7 +45,7 @@ prints that same list on its own.
 ### The bar
 
 `--with-bar` installs [glueqs](https://github.com/vladbiber/glueqs), a
-quickshell bar written for gluewc: it installs Quickshell and the tools the
+quickshell bar written for gluemac: it installs Quickshell and the tools the
 bar's panels use (`curl` for the weather, `bluez` and `upower` for the
 Bluetooth and battery panels; NetworkManager is not forced on anyone, the Wi-Fi
 list just stays empty without `nmcli`), enables the Bluetooth daemon, clones
@@ -65,7 +65,7 @@ set up and the script says where to get the binary.
 
 The panels shell out to `bluetoothctl`, `nmcli`, `loginctl`, `udevadm` and
 `curl`; a session bus and D-Bus activation for UPower are all the rest needs,
-and `gluewc-session` provides the bus where there is no systemd user session.
+and `gluemac-session` provides the bus where there is no systemd user session.
 
 The default prefix is `/usr/local`; the display-manager entry is installed in
 `/usr/share/wayland-sessions`. Override `SESSIONDIR` when a distribution uses a
@@ -100,7 +100,7 @@ package database sits under `/usr/lib/apk` and there is no
 calls GNU make `gmake` (the installer uses whichever it finds), ships wlroots
 0.20 in its repositories and has `doas` rather than `sudo`; the installer uses
 `sudo`, then `doas`, then `run0`, whichever is there. Its PipeWire is enabled
-through the `pipewire-dinit` user services and `gluewc-session` starts the
+through the `pipewire-dinit` user services and `gluemac-session` starts the
 daemons itself where they are not running.
 
 Alongside the compositor the installer adds a terminal and a launcher, because
@@ -121,7 +121,7 @@ Check what would happen without changing anything:
 
 ```sh
 ./install.sh --dry-run
-GLUEWC_DISTRO=fedora ./install.sh --dry-run   # pretend to be another family
+GLUEMAC_DISTRO=fedora ./install.sh --dry-run   # pretend to be another family
 ```
 
 ### Audio
@@ -135,7 +135,7 @@ systemctl --user enable --now pipewire.socket pipewire-pulse.socket wireplumber.
 ```
 
 On the distributions without systemd user units — Alpine, Void, Artix, Gentoo
-with OpenRC — nothing needs enabling: `gluewc-session` starts `pipewire`,
+with OpenRC — nothing needs enabling: `gluemac-session` starts `pipewire`,
 `wireplumber` and `pipewire-pulse` itself when it finds them and they are not
 already running.
 
@@ -154,9 +154,9 @@ installed and nothing is left behind. Run them from a TTY, not from inside
 another Wayland session, unless you want a nested one:
 
 ```sh
-nix shell github:vladbiber/gluewc nixpkgs#alacritty nixpkgs#rofi -c gluewc-session
-nix run github:vladbiber/gluewc                        # the compositor, bare
-nix develop github:vladbiber/gluewc                    # a shell where make works
+nix shell github:vladbiber/gluemac nixpkgs#alacritty nixpkgs#rofi -c gluemac-session
+nix run github:vladbiber/gluemac                        # the compositor, bare
+nix develop github:vladbiber/gluemac                    # a shell where make works
 ```
 
 Name the terminal and the launcher, as the first line does. The package does
@@ -173,16 +173,16 @@ up PipeWire, the portals and Xwayland:
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    gluewc.url = "github:vladbiber/gluewc";
+    gluemac.url = "github:vladbiber/gluemac";
   };
 
-  outputs = { nixpkgs, gluewc, ... }: {
+  outputs = { nixpkgs, gluemac, ... }: {
     nixosConfigurations.mymachine = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
         ./configuration.nix
-        gluewc.nixosModules.default
-        { programs.gluewc.enable = true; }
+        gluemac.nixosModules.default
+        { programs.gluemac.enable = true; }
       ];
     };
   };
@@ -193,16 +193,16 @@ Module options:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `programs.gluewc.enable` | `false` | install gluewc and register its session |
-| `programs.gluewc.package` | this flake's package | swap in your own build |
-| `programs.gluewc.audio` | `true` | PipeWire with the ALSA and PulseAudio bridges |
-| `programs.gluewc.bar.enable` | `false` | the glueqs bar: `glueqs` on PATH (Quickshell from nixpkgs, the QML from this flake's `glueqs` input), `curl`, `bluez`, `upower`, `playerctl`, `brightnessctl`, `grim`, `slurp`, `wl-clipboard`, Bluetooth and UPower on, and `autostart = glueqs` in the config seeded for new accounts |
-| `programs.gluewc.bar.package` | this flake's `glueqs` | swap in your own build of the bar |
+| `programs.gluemac.enable` | `false` | install gluemac and register its session |
+| `programs.gluemac.package` | this flake's package | swap in your own build |
+| `programs.gluemac.audio` | `true` | PipeWire with the ALSA and PulseAudio bridges |
+| `programs.gluemac.bar.enable` | `false` | the glueqs bar: `glueqs` on PATH (Quickshell from nixpkgs, the QML from this flake's `glueqs` input), `curl`, `bluez`, `upower`, `playerctl`, `brightnessctl`, `grim`, `slurp`, `wl-clipboard`, Bluetooth and UPower on, and `autostart = glueqs` in the config seeded for new accounts |
+| `programs.gluemac.bar.package` | this flake's `glueqs` | swap in your own build of the bar |
 
-With `bar.enable`, the default `package` becomes `gluewc-with-bar`, the same
+With `bar.enable`, the default `package` becomes `gluemac-with-bar`, the same
 compositor whose shipped `config.def.conf` ends in `autostart = glueqs`, which
-is what `gluewc-session` copies at a user's first login. An account that
-already has `~/.config/gluewc/config.conf` adds that line itself. The bar's
+is what `gluemac-session` copies at a user's first login. An account that
+already has `~/.config/gluemac/config.conf` adds that line itself. The bar's
 settings are written to `~/.config/glueqs/settings.json`, so the store path
 being read-only does not matter. The `glueqs` input is pinned in `flake.lock`;
 `nix flake update glueqs` moves it to the newest bar. `nix run
@@ -213,8 +213,8 @@ you only want the package and none of the session wiring, skip the module and
 use the overlay instead:
 
 ```nix
-nixpkgs.overlays = [ gluewc.overlays.default ];
-environment.systemPackages = [ pkgs.gluewc ];
+nixpkgs.overlays = [ gluemac.overlays.default ];
+environment.systemPackages = [ pkgs.gluemac ];
 ```
 
 The flake tracks `nixos-unstable` because it needs `wlroots_0_20` and
@@ -236,7 +236,7 @@ The system flake lives in `/etc/finix`, so all three edits go there. In
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     finix.url = "github:finix-community/finix";
-    gluewc.url = "github:vladbiber/gluewc";
+    gluemac.url = "github:vladbiber/gluemac";
   };
 ```
 
@@ -247,7 +247,7 @@ and the rest:
       modules = with finix.nixosModules; [
         { nixpkgs.pkgs = nixpkgs.lib.mkDefault pkgs; }
         (./configuration.nix)
-        inputs.gluewc.nixosModules.default
+        inputs.gluemac.nixosModules.default
         # ... the finix modules already listed here
       ];
 ```
@@ -256,8 +256,8 @@ Then in `/etc/finix/configuration.nix`, next to whichever `programs.<wm>.enable`
 is already there:
 
 ```nix
-  programs.gluewc.enable = true;
-  programs.gluewc.bar.enable = true;   # the glueqs bar; drop it for a bare compositor
+  programs.gluemac.enable = true;
+  programs.gluemac.bar.enable = true;   # the glueqs bar; drop it for a bare compositor
   environment.systemPackages = with pkgs; [ alacritty rofi ];
 ```
 
@@ -265,12 +265,12 @@ The terminal and the launcher are not optional in practice: the compiled
 defaults bind `Super+Q` and `Super+Return` to alacritty and `Super+Space` to
 rofi, and without them you log into a working compositor that shows a black
 screen and opens nothing. Swap them for what you prefer and change the
-bindings in `~/.config/gluewc/config.conf`.
+bindings in `~/.config/gluemac/config.conf`.
 
-Rebuild with `sudo finix-rebuild switch` and pick gluewc in tuigreet. The
+Rebuild with `sudo finix-rebuild switch` and pick gluemac in tuigreet. The
 session entry travels with the package in `share/wayland-sessions`, which is
 exactly where the greeter looks
-(`/run/current-system/sw/share/wayland-sessions`), and `gluewc-session` starts
+(`/run/current-system/sw/share/wayland-sessions`), and `gluemac-session` starts
 the audio daemons itself where there are no user services to enable.
 
 ## Required versions
@@ -326,13 +326,13 @@ and gives you the source tree to hack on.
 **1. Install the dependencies.** Either let the installer do only that step:
 
 ```sh
-git clone https://github.com/vladbiber/gluewc.git
-cd gluewc
+git clone https://github.com/vladbiber/gluemac.git
+cd gluemac
 ./install.sh --deps-only
 ```
 
 or install them yourself from the lists above and skip to the next step. Verify
-that the two libraries gluewc links against are visible. `make` searches
+that the two libraries gluemac links against are visible. `make` searches
 `$PREFIX/lib/pkgconfig` and `$PREFIX/lib64/pkgconfig` on its own, which is
 where the installer puts the wlroots and SceneFX it builds; bare `pkg-config`
 does not, so name the path when checking by hand:
@@ -350,10 +350,10 @@ make
 The first build copies `config.def.h` to `config.h`. That file holds the
 compile-time defaults — keybindings, colours, autostart — and is yours to edit;
 `make` never overwrites it afterwards. Most settings can also be changed at
-runtime in `~/.config/gluewc/config.conf`, so you rarely need to touch it. After
+runtime in `~/.config/gluemac/config.conf`, so you rarely need to touch it. After
 editing it, rebuild with `make` again.
 
-To keep the version string that `gluewc -v` prints, build from a git checkout:
+To keep the version string that `gluemac -v` prints, build from a git checkout:
 the Makefile asks `git describe` for it and falls back to `_VERSION` in
 `config.mk` when there is no repository.
 
@@ -364,16 +364,16 @@ sudo make install
 ```
 
 The default prefix is `/usr/local`; the session entry goes to
-`/usr/share/wayland-sessions/gluewc.desktop`. Both are variables:
+`/usr/share/wayland-sessions/gluemac.desktop`. Both are variables:
 
 ```sh
-sudo make install PREFIX=/opt/gluewc
+sudo make install PREFIX=/opt/gluemac
 sudo make install SESSIONDIR=/usr/local/share/wayland-sessions
 make install DESTDIR=/tmp/stage PREFIX=/usr      # staged, for packaging
 ```
 
-`gluewc-session` finds its default config relative to its own prefix, so a
-custom `PREFIX` needs no further setup; `GLUEWC_DATADIR` overrides the lookup if
+`gluemac-session` finds its default config relative to its own prefix, so a
+custom `PREFIX` needs no further setup; `GLUEMAC_DATADIR` overrides the lookup if
 you move the data directory somewhere else.
 
 **4. Check and clean up.**
@@ -384,7 +384,7 @@ make clean      # remove the binary, the objects and the generated protocols
 sudo make uninstall
 ```
 
-`make uninstall` leaves `~/.config/gluewc` alone.
+`make uninstall` leaves `~/.config/gluemac` alone.
 
 ### Building against a wlroots that is not installed
 
@@ -402,7 +402,7 @@ make LDFLAGS='-Wl,-rpath,/opt/wlroots/lib'
 ### Keeping a source install up to date
 
 ```sh
-cd gluewc
+cd gluemac
 git pull
 make clean && make
 sudo make install
@@ -413,15 +413,15 @@ gains new options upstream, diff the two files and copy over what you want.
 
 ## Starting a session
 
-From a display manager, select **gluewc**. From a configured TTY:
+From a display manager, select **gluemac**. From a configured TTY:
 
 ```sh
-gluewc-session
+gluemac-session
 ```
 
 The wrapper supplies the Wayland desktop environment, creates a D-Bus session
 when needed, starts available PipeWire components, seeds the default config and
-writes `~/.local/state/gluewc.log`.
+writes `~/.local/state/gluemac.log`.
 
 ## Troubleshooting
 
@@ -436,26 +436,26 @@ PKG_CONFIG_PATH=/usr/local/lib/pkgconfig pkg-config --modversion wlroots-0.20 sc
 Check the installed binary and runtime libraries:
 
 ```sh
-/usr/local/bin/gluewc -v
-ldd /usr/local/bin/gluewc | grep 'not found'
+/usr/local/bin/gluemac -v
+ldd /usr/local/bin/gluemac | grep 'not found'
 ```
 
-`gluewc -v` prints the version and returns a non-zero status by design. For a
-verbose compositor log, start `gluewc -d` from a TTY. A session launched through
-`gluewc-session` records its normal log at:
+`gluemac -v` prints the version and returns a non-zero status by design. For a
+verbose compositor log, start `gluemac -d` from a TTY. A session launched through
+`gluemac-session` records its normal log at:
 
 ```text
-~/.local/state/gluewc.log
+~/.local/state/gluemac.log
 ```
 
 If the session entry is missing, verify that
-`/usr/share/wayland-sessions/gluewc.desktop` exists and restart the display
+`/usr/share/wayland-sessions/gluemac.desktop` exists and restart the display
 manager. If the compositor starts but default shortcuts launch nothing, install
 the optional programs listed in the README or replace their `spawn:` actions.
 
 If there is no sound, check that the daemons are actually running inside the
 session — `pgrep -u "$USER" -x pipewire wireplumber` — and look at the tail of
-`~/.local/state/gluewc.log`. On a systemd distribution the units are the usual
+`~/.local/state/gluemac.log`. On a systemd distribution the units are the usual
 suspect:
 
 ```sh

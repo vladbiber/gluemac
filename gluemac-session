@@ -1,22 +1,22 @@
 #!/bin/sh
-# gluewc-session: what the display manager runs (or what you run from a TTY).
+# gluemac-session: what the display manager runs (or what you run from a TTY).
 # It seeds the config, finds the right D-Bus session, gets audio going and
-# then runs the compositor with its stderr kept in ~/.local/state/gluewc.log.
+# then runs the compositor with its stderr kept in ~/.local/state/gluemac.log.
 
 export XDG_SESSION_TYPE=wayland
-export XDG_SESSION_DESKTOP=gluewc
-export XDG_CURRENT_DESKTOP=gluewc
+export XDG_SESSION_DESKTOP=gluemac
+export XDG_CURRENT_DESKTOP=gluemac
 
-CFGDIR="${XDG_CONFIG_HOME:-$HOME/.config}/gluewc"
+CFGDIR="${XDG_CONFIG_HOME:-$HOME/.config}/gluemac"
 if [ ! -e "$CFGDIR/config.conf" ]; then
 	mkdir -p "$CFGDIR"
 	# The prefix this script was installed under comes first, so a custom
 	# --prefix and a Nix store path find their own default config; the fixed
 	# paths keep working for anything that puts the script elsewhere.
 	SELFDIR=$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || true)
-	for dir in ${GLUEWC_DATADIR:+"$GLUEWC_DATADIR"} \
-			${SELFDIR:+"$SELFDIR/../share/gluewc"} \
-			/usr/local/share/gluewc /usr/share/gluewc; do
+	for dir in ${GLUEMAC_DATADIR:+"$GLUEMAC_DATADIR"} \
+			${SELFDIR:+"$SELFDIR/../share/gluemac"} \
+			/usr/local/share/gluemac /usr/share/gluemac; do
 		if [ -r "$dir/config.def.conf" ]; then
 			cp "$dir/config.def.conf" "$CFGDIR/config.conf"
 			break
@@ -43,8 +43,8 @@ if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
 fi
 
 LOGDIR="${XDG_STATE_HOME:-$HOME/.local/state}"
-LOG="$LOGDIR/gluewc.log"
-AUDIOLOG="$LOGDIR/gluewc-audio.log"
+LOG="$LOGDIR/gluemac.log"
+AUDIOLOG="$LOGDIR/gluemac-audio.log"
 mkdir -p "$LOGDIR"
 mv -f "$LOG" "$LOG.old" 2>/dev/null
 ulimit -c unlimited 2>/dev/null
@@ -94,7 +94,7 @@ else
 		sleep 0.3
 		want wireplumber && start_daemon wireplumber wp
 		want pipewire-pulse && start_daemon pipewire-pulse pp
-		while kill -0 "$GLUEWC_PID" 2>/dev/null; do
+		while kill -0 "$GLUEMAC_PID" 2>/dev/null; do
 			sleep 2
 			now=$(date +%s)
 			if [ $((now - window)) -ge 60 ]; then
@@ -121,18 +121,18 @@ else
 fi
 
 {
-	printf '== gluewc session %s ==\n' "$(date)"
+	printf '== gluemac session %s ==\n' "$(date)"
 	printf 'D-Bus: %s\n' "${DBUS_SESSION_BUS_ADDRESS:-none}"
-	gluewc "$@" &
-	GLUEWC_PID=$!
+	gluemac "$@" &
+	GLUEMAC_PID=$!
 	if [ -z "$AUDIO_SUPERVISOR" ] && ! has_user_systemd; then
 		supervise_audio &
 		AUDIO_SUPERVISOR=$!
 	fi
-	wait "$GLUEWC_PID"
+	wait "$GLUEMAC_PID"
 	status=$?
 	[ -n "$AUDIO_SUPERVISOR" ] && kill "$AUDIO_SUPERVISOR" 2>/dev/null
-	printf '== gluewc exited status=%s %s ==\n' "$status" "$(date)"
+	printf '== gluemac exited status=%s %s ==\n' "$status" "$(date)"
 	sync 2>/dev/null
 	exit "$status"
 } >>"$LOG" 2>&1

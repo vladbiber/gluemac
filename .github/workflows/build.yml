@@ -36,6 +36,6 @@ jobs:
 
       - name: Check
         run: |
-          sh -n install.sh gluewc-session tests/drm-test.sh
+          sh -n install.sh gluemac-session tests/drm-test.sh
           git diff --check
-          ./gluewc -v 2>&1 | grep -q '^gluewc '
+          ./gluemac -v 2>&1 | grep -q '^gluemac '

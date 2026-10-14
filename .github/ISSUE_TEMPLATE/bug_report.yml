@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible gluewc problem
+description: Report a reproducible gluemac problem
 title: "[bug] "
 labels: [bug]
 body:
@@ -12,7 +12,7 @@ body:
   - type: input
     attributes:
       label: Version
-      description: Output of `gluewc -v`.
+      description: Output of `gluemac -v`.
     validations:
       required: true
   - type: input
@@ -24,7 +24,7 @@ body:
   - type: textarea
     attributes:
       label: Log
-      description: Relevant end of `~/.local/state/gluewc.log`; remove private data.
+      description: Relevant end of `~/.local/state/gluemac.log`; remove private data.
       render: text
   - type: checkboxes
     attributes:

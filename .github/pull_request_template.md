@@ -1,6 +1,6 @@
 ## Summary
 
-Describe the behavior change and why it belongs in gluewc.
+Describe the behavior change and why it belongs in gluemac.
 
 ## Verification
 
