@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
 			i += 5;
 		} else if (!strcmp(argv[i], "press") || !strcmp(argv[i], "release")
 				|| !strcmp(argv[i], "rpress") || !strcmp(argv[i], "rrelease")) {
-			int right = argv[i][0] == 'r';
+			int right = argv[i][0] == 'r' && argv[i][1] != 'e';
 			int down = !strcmp(argv[i] + right, "press");
 			zwlr_virtual_pointer_v1_button(p, t++,
 					right ? BTN_RIGHT : BTN_LEFT,

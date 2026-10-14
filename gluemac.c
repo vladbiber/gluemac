@@ -185,6 +185,7 @@ struct Client {
 	struct wl_listener req_resize;
 	struct wl_listener req_minimize;
 	int minimized; /* MinMinimized, MinHidden (Cmd+H) or MinDesktop */
+	int genie;     /* hidden while the genie pours it back out */
 	int fsspace;   /* fullscreen on a space of its own */
 	int tiled, zoomed;
 	struct wlr_box restore; /* size before it was tiled or zoomed */
@@ -284,6 +285,8 @@ typedef struct {
 	struct wl_list link;
 	int mapped;
 	struct wlr_layer_surface_v1 *layer_surface;
+	struct wlr_scene_blur *blur; /* behind a shell panel that asks for it */
+	int blurmask;
 
 	struct wl_listener destroy;
 	struct wl_listener unmap;
@@ -584,6 +587,8 @@ static const char *transformname(enum wl_output_transform t);
 static void overviewbuild(void);
 static void overviewtouch(Client *c);
 static int overviewcardsupdate(Client *c);
+static void clientforeachbuffer(Client *c, wlr_scene_buffer_iterator_func_t fn, void *data);
+static bool closeaniminput(struct wlr_scene_buffer *buffer, double *sx, double *sy);
 static void overviewframes(Monitor *m, struct timespec *now);
 static void overviewbutton(struct wlr_pointer_button_event *event);
 static void overviewclone(struct wlr_scene_buffer *buffer, int sx, int sy, void *data);
@@ -720,6 +725,10 @@ static struct wlr_scene_tree *overview_scene;
 static struct wlr_scene_tree *overview_panels_scene;
 static struct wlr_scene_tree *overview_drag_scene;
 static struct wl_list overview_cards;
+/* layer-shell namespaces blurred behind, like Hyprland's "layerrule = blur";
+ * a trailing * matches a prefix */
+static char blur_layers[512] = "eqsh:blur eqsh:ddm-blur eqsh:lock-blur eqsh:spotlight";
+static float blur_brightness = 0.9f, blur_contrast = 0.9f, blur_saturation = 1.1f;
 static struct wl_list close_anims;
 static int overview_active;
 static int overview_visible;
@@ -1396,6 +1405,67 @@ layeropacity(LayerSurface *l, float opacity)
 {
 	wlr_scene_node_for_each_buffer(&l->scene->node, layersetopacity, &opacity);
 	wlr_scene_node_for_each_buffer(&l->popups->node, layersetopacity, &opacity);
+	if (l->blur)
+		wlr_scene_blur_set_alpha(l->blur, opacity);
+}
+
+static int
+layerwantsblur(LayerSurface *l)
+{
+	const char *ns = l->layer_surface->namespace, *p = blur_layers, *e;
+	size_t n;
+
+	if (!ns || !*ns)
+		return 0;
+	while (*p) {
+		p += strspn(p, " \t,");
+		e = p + strcspn(p, " \t,");
+		n = (size_t)(e - p);
+		if (n && (p[n - 1] == '*' ? !strncmp(ns, p, n - 1)
+				: strlen(ns) == n && !strncmp(ns, p, n)))
+			return 1;
+		p = e;
+	}
+	return 0;
+}
+
+static void
+layerblurmask(struct wlr_scene_buffer *buffer, int sx, int sy, void *data)
+{
+	LayerSurface *l = data;
+	struct wlr_scene_surface *ss = wlr_scene_surface_try_from_buffer(buffer);
+
+	if (!ss || ss->surface != l->layer_surface->surface)
+		return;
+	if (wlr_scene_blur_get_transparency_mask_source(l->blur) != buffer)
+		wlr_scene_blur_set_transparency_mask_source(l->blur, buffer);
+	/* sx, sy count the layer's own offset, the blur sits inside it */
+	wlr_scene_node_set_position(&l->blur->node, sx - l->scene->node.x,
+			sy - l->scene->node.y);
+	l->blurmask = 1;
+}
+
+/* The blur follows the panel's main buffer as its mask, so only the parts
+ * the shell actually paints are frosted (Hyprland's ignore_alpha 0). */
+static void
+layerblur(LayerSurface *l)
+{
+	struct wlr_surface *surface = l->layer_surface->surface;
+
+	if (!layerwantsblur(l)) {
+		if (l->blur)
+			wlr_scene_node_destroy(&l->blur->node);
+		l->blur = NULL;
+		return;
+	}
+	if (!l->blur && !(l->blur = wlr_scene_blur_create(l->scene, 0, 0)))
+		return;
+	l->blur->node.data = l;
+	wlr_scene_node_lower_to_bottom(&l->blur->node);
+	l->blurmask = 0;
+	wlr_scene_node_for_each_buffer(&l->scene->node, layerblurmask, l);
+	wlr_scene_node_set_enabled(&l->blur->node, l->blurmask && surface->mapped);
+	wlr_scene_blur_set_size(l->blur, surface->current.width, surface->current.height);
 }
 
 static void
@@ -1521,7 +1591,7 @@ arrange(Monitor *m)
 			int vis = VISIBLEON(c, m) && (!fs || c == fs
 					|| (SCROLLLT(m) && fs->isfakefull));
 			int render = vis || (c->anim.workspace && c->anim.hide) || wsdragshows(c);
-			wlr_scene_node_set_enabled(&c->scene->node, render);
+			wlr_scene_node_set_enabled(&c->scene->node, render && !c->genie);
 			client_set_suspended(c, !vis);
 		}
 	}
@@ -3866,6 +3936,7 @@ cleanup(void)
 #endif
 	wl_display_destroy_clients(dpy);
 	closeanimclear(NULL);
+	genieclear(NULL, NULL);
 	if (child_pid > 0) {
 		kill(-child_pid, SIGTERM);
 		waitpid(child_pid, NULL, 0);
@@ -3930,6 +4001,7 @@ cleanupmon(struct wl_listener *listener, void *data)
 
 	closemon(m);
 	closeanimclear(m);
+	genieclear(m, NULL);
 	wlr_scene_node_destroy(&m->fullscreen_bg->node);
 	free(m);
 	saveoutputstate();
@@ -4026,6 +4098,7 @@ commitlayersurfacenotify(struct wl_listener *listener, void *data)
 		return;
 	}
 
+	layerblur(l);
 	if (layer_surface->current.committed == 0 && l->mapped == layer_surface->surface->mapped)
 		return;
 	wasmapped = l->mapped;
@@ -7926,6 +7999,7 @@ rendermon(struct wl_listener *listener, void *data)
 			if (!skipframe) {
 				animpending |= layeranimadvance(m, dt);
 				animpending |= closeanimadvance(m, dt);
+				animpending |= genieadvance(m, dt);
 			}
 			/* a hide that finished on a window the current workspace owns
 			 * again: let arrange() settle visibility from the real state */
@@ -9286,6 +9360,14 @@ readconfig(void)
 			blur_passes = atoi(v);
 		} else if (!strcmp(k, "blur_radius")) {
 			blur_radius = atoi(v);
+		} else if (!strcmp(k, "blur_layers")) {
+			snprintf(blur_layers, sizeof blur_layers, "%s", v);
+		} else if (!strcmp(k, "blur_brightness")) {
+			blur_brightness = strtof(v, NULL);
+		} else if (!strcmp(k, "blur_contrast")) {
+			blur_contrast = strtof(v, NULL);
+		} else if (!strcmp(k, "blur_saturation")) {
+			blur_saturation = strtof(v, NULL);
 		} else if (!strcmp(k, "opacity")) {
 			win_opacity = strtof(v, NULL);
 			if (win_opacity < 0.1f)
@@ -9376,7 +9458,8 @@ setup(void)
 
 	/* Initialize the scene graph used to lay out windows */
 	scene = wlr_scene_create();
-	wlr_scene_set_blur_data(scene, blur_passes, blur_radius, 0.02f, 0.9f, 0.9f, 1.1f);
+	wlr_scene_set_blur_data(scene, blur_passes, blur_radius, 0.02f,
+			blur_brightness, blur_contrast, blur_saturation);
 	root_bg = wlr_scene_rect_create(&scene->tree, 0, 0, rootcolor);
 	wl_list_init(&close_anims);
 	for (i = 0; i < NUM_LAYERS; i++)
@@ -9650,7 +9733,8 @@ reloadconfig(const Arg *arg)
 		animstop(m);
 	applyoutputcfgs();
 
-	wlr_scene_set_blur_data(scene, blur_passes, blur_radius, 0.02f, 0.9f, 0.9f, 1.1f);
+	wlr_scene_set_blur_data(scene, blur_passes, blur_radius, 0.02f,
+			blur_brightness, blur_contrast, blur_saturation);
 	wlr_scene_rect_set_color(root_bg, rootcolor);
 
 	if ((context = xkb_context_new(XKB_CONTEXT_NO_FLAGS))) {
@@ -9671,6 +9755,13 @@ reloadconfig(const Arg *arg)
 		applyeffects(c);
 		if (c->isfloating)
 			resize(c, c->geom, 0);
+	}
+	wl_list_for_each(m, &mons, link) {
+		LayerSurface *l;
+		int ly;
+		for (ly = 0; ly < 4; ly++)
+			wl_list_for_each(l, &m->layers[ly], link)
+				layerblur(l);
 	}
 	focusclient(focustop(selmon), 1);
 	wl_list_for_each(m, &mons, link)

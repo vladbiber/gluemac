@@ -6,6 +6,8 @@ static int mac_cmd_as_ctrl = 1;
 static int mac_super_tap = 0;
 static int mac_spaces = 1;
 static int mac_edge_tiling = 1;
+static int mac_genie = 1;
+static int mac_genie_duration = 520;
 static char mac_terminals[512] = "Alacritty alacritty foot footclient kitty "
 		"org.wezfurlong.wezterm com.mitchellh.ghostty st-glue xterm "
 		"org.gnome.Console org.gnome.Ptyxis konsole";
@@ -284,6 +286,7 @@ macmap(Client *c, Client *p)
 static void
 macunmap(Client *c)
 {
+	genieclear(NULL, c);
 	mac_fsgone.m = NULL;
 	if (mac_stacking && c->fsspace && c->mon) {
 		mac_fsgone.m = c->mon;
@@ -612,7 +615,7 @@ macminimize(Client *c, int kind)
 {
 	if (!macmanaged(c) || c->minimized || c->isfullscreen)
 		return;
-	if (kind == MinMinimized && animations)
+	if (kind == MinMinimized && animations && !geniestart(c, 0))
 		clientcloseanim(c);
 	c->minimized = kind;
 	if (c->ftl && kind == MinMinimized)
@@ -629,6 +632,8 @@ macunminimize(Client *c)
 		return;
 	if (c->ftl && c->minimized == MinMinimized)
 		wlr_foreign_toplevel_handle_v1_set_minimized(c->ftl, 0);
+	if (c->minimized == MinMinimized)
+		geniestart(c, 1);
 	c->minimized = MinNone;
 	if (c->mon)
 		arrange(c->mon);
@@ -1007,6 +1012,10 @@ maccfg(const char *k, const char *v)
 		mac_spaces = MAX(1, MIN(NUMWS, atoi(v)));
 	else if (!strcmp(k, "edge_tiling"))
 		mac_edge_tiling = on;
+	else if (!strcmp(k, "minimize_effect"))
+		mac_genie = !strcmp(v, "genie");
+	else if (!strcmp(k, "genie_duration"))
+		mac_genie_duration = atoi(v);
 	else if (!strcmp(k, "terminals"))
 		snprintf(mac_terminals, sizeof mac_terminals, "%s", v);
 	else {
@@ -1025,4 +1034,5 @@ maccfg(const char *k, const char *v)
 	return 1;
 }
 
+#include "macgenie.c"
 #include "macmc.c"
