@@ -18,8 +18,11 @@ WLR_LIBS = `$(PKG_CONFIG) --libs wlroots-0.20`
 
 # SceneFX provides the fx scene graph (rounded corners, blur, shadows).
 # It must come before wlroots at link time so its wlr_scene_* symbols win.
-SCENEFX_INCS = `$(PKG_CONFIG) --cflags scenefx-0.5`
-SCENEFX_LIBS = `$(PKG_CONFIG) --libs scenefx-0.5`
+# gluemac builds its own copy in scenefx/ (Liquid Glass) and links it in.
+SCENEFX_BUILD = build-scenefx
+SCENEFX_PC = PKG_CONFIG_PATH="$(SCENEFX_BUILD)/meson-uninstalled:$${PKG_CONFIG_PATH:+$$PKG_CONFIG_PATH:}$(PREFIX)/lib/pkgconfig:$(PREFIX)/lib64/pkgconfig" pkg-config
+SCENEFX_INCS = `$(SCENEFX_PC) --cflags scenefx-0.5`
+SCENEFX_LIBS = `$(SCENEFX_PC) --static --libs scenefx-0.5`
 
 # Allow using an alternative wlroots installation
 # This has to have all the includes required by wlroots, e.g:

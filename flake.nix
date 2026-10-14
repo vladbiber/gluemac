@@ -49,6 +49,9 @@
             pkg-config
             wayland-scanner
             makeWrapper
+            # the vendored SceneFX in scenefx/ is built by the Makefile
+            meson
+            ninja
           ];
 
           buildInputs =
@@ -72,7 +75,7 @@
               (pkgs.libxcb or pkgs.xorg.libxcb)
               (pkgs.libxcb-wm or pkgs.xorg.xcbutilwm)
               (pkgs.wlroots_0_20 or pkgs.wlroots)
-              (pkgs.scenefx_0_5 or pkgs.scenefx)
+              lcms2
             ];
 
           # wayland-scanner is a build tool, so strictDeps puts its pkg-config

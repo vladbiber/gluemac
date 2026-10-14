@@ -734,6 +734,7 @@ static struct wl_list overview_cards;
  * a trailing * matches a prefix */
 static char blur_layers[512] = "eqsh:blur eqsh:ddm-blur eqsh:lock-blur eqsh:spotlight";
 static float blur_brightness = 0.9f, blur_contrast = 0.9f, blur_saturation = 1.1f;
+static float liquid_glass = 0.6f, liquid_glass_band = 18.0f;
 static struct wl_list close_anims;
 static int overview_active;
 static int overview_visible;
@@ -1478,6 +1479,7 @@ layerblur(LayerSurface *l)
 	wlr_scene_node_for_each_buffer(&l->scene->node, layerblurmask, l);
 	wlr_scene_node_set_enabled(&l->blur->node, l->blurmask && surface->mapped);
 	wlr_scene_blur_set_size(l->blur, surface->current.width, surface->current.height);
+	wlr_scene_blur_set_glass(l->blur, liquid_glass, liquid_glass_band);
 }
 
 static void
@@ -9564,6 +9566,10 @@ readconfig(void)
 			blur_contrast = strtof(v, NULL);
 		} else if (!strcmp(k, "blur_saturation")) {
 			blur_saturation = strtof(v, NULL);
+		} else if (!strcmp(k, "liquid_glass")) {
+			liquid_glass = strtof(v, NULL);
+		} else if (!strcmp(k, "liquid_glass_band")) {
+			liquid_glass_band = strtof(v, NULL);
 		} else if (!strcmp(k, "opacity")) {
 			win_opacity = strtof(v, NULL);
 			if (win_opacity < 0.1f)
