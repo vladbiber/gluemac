@@ -160,6 +160,7 @@ struct Client {
 	struct wlr_scene_buffer *titlebar; /* the Mac title bar, mactitle.c */
 	int tb; /* its height, 0 without one; part of geom like the border */
 	uint32_t tbhash;
+	struct wlr_buffer *tbbuf; /* locked: the bar's pixels for Mission Control */
 	int tbreveal; /* full screen: the bar called down by the pointer */
 	struct wlr_foreign_toplevel_handle_v1 *ftl;
 	struct wl_list link;
@@ -1958,7 +1959,7 @@ wsdragframe(Monitor *m)
 		return 0;
 	dt = wsdrag.lastframe ? MIN(50, t - wsdrag.lastframe) : 16.0;
 	wsdrag.lastframe = t;
-	a = 1.0 - exp(-dt / 22.0);
+	a = 1.0 - exp(-dt / 10.0);
 	wsdrag.shown += (wsdrag.pos - wsdrag.shown) * a;
 	if (fabs(wsdrag.pos - wsdrag.shown) < 0.05)
 		wsdrag.shown = wsdrag.pos;
@@ -1982,8 +1983,8 @@ wsdraganim(Client *c, int tooff, int hide, int dur)
 	c->anim.t = 0.0f;
 }
 
-/* let go: finish the switch when the fingers went past half way, or were
- * still moving fast enough to get there; otherwise spring back */
+/* let go: finish the switch when the fingers went a third of the way, or
+ * were still moving fast enough to get there; otherwise spring back */
 static void
 wsdragend(int cancelled, uint32_t time)
 {
@@ -1991,13 +1992,13 @@ wsdragend(int cancelled, uint32_t time)
 	Client *c;
 	double vel = wsdragvel(time);
 	double p = wsdragclamp(wsdrag.pos), shown = wsdragprogress();
-	double proj = p + vel / MAX(50, swipe_distance) * 180.0;
+	double proj = p + vel / MAX(50, swipe_distance) * 260.0;
 	double left, speed;
 	int span = wsdragspan(), dir = wsdrag.dir, commit, dur;
 	unsigned int oldws = m->ws;
 
 	commit = !cancelled && dir && wsdrag.nb < NUMWS
-			&& ((dir > 0 && p < 0.0 && proj <= -0.5) || (dir < 0 && p > 0.0 && proj >= 0.5));
+			&& ((dir > 0 && p < 0.0 && proj <= -0.3) || (dir < 0 && p > 0.0 && proj >= 0.3));
 	left = (commit ? 1.0 - fabs(shown) : fabs(shown)) * span;
 	dur = (int)(MAX(180, animation_duration * 5 / 4) * left / MAX(1, span));
 	/* the ease-out starts at 3x its mean speed: match the fingers */
@@ -3893,6 +3894,8 @@ buttonpress(struct wl_listener *listener, void *data)
 		selmon = xytomon(cursor->x, cursor->y);
 		if (locked)
 			break;
+		if (macresizepress(event))
+			return;
 
 		/* Change focus if the button was _pressed_ over a client */
 		xytonode(cursor->x, cursor->y, NULL, &c, NULL, NULL, NULL);
@@ -6141,9 +6144,17 @@ clientforeachbuffer(Client *c, wlr_scene_buffer_iterator_func_t fn, void *data)
 
 	if (!enabled)
 		wlr_scene_node_set_enabled(&c->scene->node, 1);
+	int tbon = c->titlebar && c->titlebar->node.enabled;
+
 	if (c->scene_surface && (c->offscreen || !c->scene_surface->node.enabled))
 		wlr_scene_node_set_enabled(&c->scene_surface->node, 1);
+	/* the title bar is part of the window wherever it is drawn */
+	mactbrestore(c);
+	if (c->titlebar && c->tb && c->titlebar->buffer)
+		wlr_scene_node_set_enabled(&c->titlebar->node, 1);
 	wlr_scene_node_for_each_buffer(&c->scene->node, fn, data);
+	if (c->titlebar && !tbon)
+		wlr_scene_node_set_enabled(&c->titlebar->node, 0);
 	if (c->scene_surface && c->offscreen)
 		wlr_scene_node_set_enabled(&c->scene_surface->node, 0);
 	else if (c->scene_surface && !enabled)
@@ -6855,8 +6866,14 @@ overviewpassthrough(void)
 	struct wlr_surface *surface = NULL;
 	LayerSurface *l = NULL;
 	Client *c = NULL;
+	Monitor *m;
 
 	if (!overview_visible || overview_drag_client)
+		return 0;
+	/* the top of the screen is Mission Control's Spaces bar, whatever
+	 * invisible shell surface sits there */
+	if (mac_stacking && !mc_appexpose && (m = xytomon(cursor->x, cursor->y))
+			&& cursor->y < m->m.y + MAX(48, m->m.height / 9) + 60)
 		return 0;
 	/* xytonode's own pl output walks one node too far up and comes back
 	 * empty, so resolve the toplevel from the surface instead */
@@ -7769,6 +7786,8 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 	if (!surface && !seat->drag)
 		wlr_cursor_set_xcursor(cursor, cursor_mgr, "default");
 	mactbmotion(c);
+	if (macresizehover())
+		return;
 
 	pointerfocus(c, surface, sx, sy, time);
 }
@@ -10421,6 +10440,9 @@ unmapnotify(struct wl_listener *listener, void *data)
 	c->shadow = NULL;
 	c->titlebar = NULL;
 	c->tbhash = 0;
+	if (c->tbbuf)
+		wlr_buffer_unlock(c->tbbuf);
+	c->tbbuf = NULL;
 	mactbforget(c);
 	motionnotify(0, NULL, 0, 0, 0, 0);
 	macunmapped();

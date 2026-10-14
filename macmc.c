@@ -151,8 +151,9 @@ mclayout(Monitor *m, McLayout *l)
 		gap = MAX(8, (int)(gap * s));
 		total = (int)l->nspaces * (tw + gap) + th * 2 / 3;
 	}
-	/* collapsed the thumbnails sit above the screen, the names show */
-	top = m->w.y + 14 - (int)lroundf((1.0f - mc_bar) * (th + 40));
+	/* collapsed the thumbnails sit above the screen, the names show; the
+	 * menu bar is away while Mission Control is up */
+	top = m->m.y + 14 - (int)lroundf((1.0f - mc_bar) * (th + 40));
 	x = m->w.x + (m->w.width - total) / 2;
 	for (i = 0; i < l->nspaces; i++, x += tw + gap)
 		l->strip[i] = (struct wlr_box){x, top, tw, th};
@@ -166,21 +167,21 @@ mclayout(Monitor *m, McLayout *l)
 	/* names in a row while collapsed, under each thumbnail when open */
 	x = m->w.x + (m->w.width - ltotal) / 2;
 	for (i = 0; i < l->nspaces; i++) {
-		int cx = x, cy = m->w.y + 12;
+		int cx = x, cy = m->m.y + 10;
 		int ex = l->strip[i].x + (tw - l->label[i].width) / 2;
 		int ey = top + th + 6;
 		l->label[i].x = cx + (int)lroundf((ex - cx) * mc_bar);
 		l->label[i].y = cy + (int)lroundf((ey - cy) * mc_bar);
 		x += l->label[i].width + 34;
 	}
-	top = m->w.y + 14;
+	top = m->m.y + 14;
 	if (mc_appexpose)
-		top = m->w.y - th - 14;
+		top = m->m.y - th - 14;
 	l->area = (struct wlr_box){m->w.x + 48, top + th + 40,
 			m->w.width - 96, m->w.y + m->w.height - (top + th + 40) - 32};
 	if (!mc_appexpose) {
 		/* closed the windows take the room the bar leaves */
-		int y0 = m->w.y + 56, y1 = top + th + 46;
+		int y0 = m->m.y + 50, y1 = top + th + 46;
 		int y = y0 + (int)lroundf((y1 - y0) * mc_bar);
 		l->area.height += l->area.y - y;
 		l->area.y = y;
@@ -472,8 +473,8 @@ mcmotion(void)
 		McLayout l;
 		float want;
 		mclayout(m, &l);
-		want = overview_dragging || cursor->y < m->w.y + (mc_bar_to > 0.5f
-				? l.strip[0].y + l.strip[0].height + 40 - m->w.y : 34) ? 1.0f : 0.0f;
+		want = overview_dragging || cursor->y < m->m.y + (mc_bar_to > 0.5f
+				? l.strip[0].y + l.strip[0].height + 40 - m->m.y : 34) ? 1.0f : 0.0f;
 		if (want != mc_bar_to) {
 			mc_bar_to = want;
 			wlr_output_schedule_frame(m->wlr_output);
@@ -698,7 +699,7 @@ mcgframe(Monitor *m)
 		return 0;
 	dt = mcg.lastframe ? MIN(50, t - mcg.lastframe) : 16.0;
 	mcg.lastframe = t;
-	mcg.shown += (mcg.pos - mcg.shown) * (1.0 - exp(-dt / 22.0));
+	mcg.shown += (mcg.pos - mcg.shown) * (1.0 - exp(-dt / 12.0));
 	if (fabs(mcg.pos - mcg.shown) < 0.002)
 		mcg.shown = mcg.pos;
 	mcgdim(mcg.shown);
@@ -730,8 +731,8 @@ mcgend(int cancelled, uint32_t time)
 {
 	static const float shown[] = {1.0f, 1.0f, 1.0f};
 	struct wlr_box target[3];
-	double proj = mcg.pos + mcgvel(time) * 160.0;
-	int open = cancelled ? mcg.closing : proj >= 0.5;
+	double proj = mcg.pos + mcgvel(time) * 220.0;
+	int open = cancelled ? mcg.closing : (mcg.closing ? proj >= 0.6 : proj >= 0.35);
 	Monitor *m;
 
 	if (!mcg.active)

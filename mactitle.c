@@ -172,6 +172,15 @@ mactbhash(const char *s, uint32_t h)
 	return h;
 }
 
+/* the scene lets go of the buffer once it has a texture of it, and Mission
+ * Control clones buffers, so the bar keeps one and hands it back */
+static void
+mactbrestore(Client *c)
+{
+	if (c->titlebar && c->tbbuf && !c->titlebar->buffer)
+		wlr_scene_buffer_set_buffer(c->titlebar, c->tbbuf);
+}
+
 /* (re)draws the bar when anything it shows changed; cheap otherwise */
 static void
 mactbupdate(Client *c)
@@ -213,11 +222,16 @@ mactbupdate(Client *c)
 	wlr_scene_node_set_enabled(&c->titlebar->node, 1);
 	wlr_scene_node_set_position(&c->titlebar->node, box.x, box.y);
 	wlr_scene_buffer_set_dest_size(c->titlebar, w, box.height);
-	if (h == c->tbhash && c->titlebar->buffer)
+	if (h == c->tbhash && c->tbbuf) {
+		mactbrestore(c);
 		return;
+	}
 	c->tbhash = h;
 	b = mactbdraw(c, w, box.height, s, focused, hover, press);
 	wlr_scene_buffer_set_buffer(c->titlebar, b);
+	if (c->tbbuf)
+		wlr_buffer_unlock(c->tbbuf);
+	c->tbbuf = wlr_buffer_lock(b);
 	wlr_buffer_drop(b);
 	r = c->tb ? MAX(0, MIN(corner_radius, w / 2) - (int)c->bw) : 0;
 	wlr_scene_buffer_set_corner_radii(c->titlebar, corner_radii_new(r, r, 0, 0));
@@ -361,5 +375,90 @@ mactbrelease(void)
 	if (under == c && mactbbox(c, &b) && mactbhit(c, cursor->x - c->geom.x - b.x,
 			cursor->y - c->geom.y - b.y) == btn)
 		mactbaction(c, btn);
+	return 1;
+}
+
+/* resizing from the edges, now that apps draw no frame of their own: a band
+ * just outside the window and a sliver inside, corners a little longer */
+#define MACRS_OUT 6
+#define MACRS_IN 3
+#define MACRS_CORNER 14
+
+static uint32_t
+macresizeedge(Client **pc)
+{
+	static const int lyr[] = {LyrFloat, LyrTile};
+	struct wlr_scene_node *node;
+	double x = cursor->x, y = cursor->y;
+	struct wlr_box g;
+	uint32_t e;
+	size_t i;
+	Client *c;
+
+	*pc = NULL;
+	if (!mac_stacking || seat->drag || overview_visible)
+		return 0;
+	for (i = 0; i < LENGTH(lyr); i++) {
+		wl_list_for_each_reverse(node, &layers[lyr[i]]->children, link) {
+			c = node->data;
+			if (!node->enabled || !c || c->type == LayerShell || !macmanaged(c)
+					|| c->isfullscreen || c->minimized || !VISIBLEON(c, c->mon))
+				continue;
+			g = c->geom;
+			if (x < g.x - MACRS_OUT || x >= g.x + g.width + MACRS_OUT
+					|| y < g.y - MACRS_OUT || y >= g.y + g.height + MACRS_OUT)
+				continue;
+			e = 0;
+			if (x < g.x + MACRS_IN)
+				e |= WLR_EDGE_LEFT;
+			else if (x >= g.x + g.width - MACRS_IN)
+				e |= WLR_EDGE_RIGHT;
+			if (y < g.y + MACRS_IN)
+				e |= WLR_EDGE_TOP;
+			else if (y >= g.y + g.height - MACRS_IN)
+				e |= WLR_EDGE_BOTTOM;
+			if (e & (WLR_EDGE_LEFT | WLR_EDGE_RIGHT)) {
+				if (y < g.y + MACRS_CORNER)
+					e |= WLR_EDGE_TOP;
+				else if (y >= g.y + g.height - MACRS_CORNER)
+					e |= WLR_EDGE_BOTTOM;
+			} else if (e) {
+				if (x < g.x + MACRS_CORNER)
+					e |= WLR_EDGE_LEFT;
+				else if (x >= g.x + g.width - MACRS_CORNER)
+					e |= WLR_EDGE_RIGHT;
+			}
+			/* inside the window proper the pointer belongs to it */
+			if (!e)
+				return 0;
+			*pc = c;
+			return e;
+		}
+	}
+	return 0;
+}
+
+static int
+macresizehover(void)
+{
+	Client *c;
+	uint32_t e = macresizeedge(&c);
+
+	if (!e)
+		return 0;
+	wlr_seat_pointer_notify_clear_focus(seat);
+	wlr_cursor_set_xcursor(cursor, cursor_mgr, macresizecursor(e));
+	return 1;
+}
+
+static int
+macresizepress(struct wlr_pointer_button_event *ev)
+{
+	Client *c;
+	uint32_t e;
+
+	if (ev->button != BTN_LEFT || !(e = macresizeedge(&c)))
+		return 0;
+	macgrab(c, CurMacResize, e);
 	return 1;
 }
