@@ -6335,9 +6335,13 @@ overviewclone(struct wlr_scene_buffer *buffer, int sx, int sy, void *data)
 static struct wlr_box
 overviewwindowbox(Monitor *m, Client *c, const struct wlr_box *panel)
 {
-	struct wlr_box geo = (c->isfullscreen || c->isfakefull) ? c->prev : c->geom;
+	struct wlr_box geo = c->isfakefull ? c->prev : c->geom;
 	float scalex = (float)panel->width / m->w.width;
 	float scaley = (float)panel->height / m->w.height;
+
+	/* a fullscreen app owns its Space: its card fills the thumbnail */
+	if (c->isfullscreen)
+		return *panel;
 
 	/* a window still sliding into place is drawn where it is right now,
 	 * so the card moves the way the window does */
@@ -6395,7 +6399,9 @@ overviewwindowdraw(struct wlr_scene_tree *tree, Client *c,
 		return;
 	scale = MIN((float)box->width / MAX(1, c->geom.width),
 			(float)box->height / MAX(1, c->geom.height));
-	radius = MAX(3, (int)roundf(MAX(4, corner_radius) * scale));
+	radius = c->isfullscreen
+			? MAX(6, (int)roundf(16.0f * box->width / MAX(1, c->geom.width)))
+			: MAX(3, (int)roundf(MAX(4, corner_radius) * scale));
 	overviewshadow(tree, (struct wlr_box){box->x, box->y + 3, box->width,
 			box->height}, radius, 12.0f, shadowcolor, clip);
 	if (focused && !decorhidden && borderpx > 0) {
