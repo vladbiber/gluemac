@@ -4,61 +4,39 @@
 [![license: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![wlroots 0.20](https://img.shields.io/badge/wlroots-0.20-7aa2f7.svg)](https://gitlab.freedesktop.org/wlroots/wlroots/-/releases/0.20.2)
 
-gluemac is a compact, animated Wayland compositor built around automatic BSP
-tiling. It combines a dwl-sized C codebase with workspaces, a GNOME-style
-overview, touchpad gestures, runtime configuration and SceneFX visuals.
+gluemac is a Wayland compositor that behaves like macOS: free-floating windows
+with traffic-light title bars, Spaces, Mission Control, full screen apps in
+their own Space and the gestures that go with them. It is the compositor behind
+the Glue Mac session of [Glue Linux](https://github.com/vladbiber/glue-linux),
+where [MacShell](https://github.com/0-ss/MacShell) draws the menu bar and the
+Dock.
 
-It is a fork of [dwl 0.8](https://codeberg.org/dwl/dwl), using
-[wlroots 0.20](https://gitlab.freedesktop.org/wlroots/wlroots) and
-[SceneFX 0.5](https://github.com/wlrfx/scenefx/releases/tag/0.5).
+It is a fork of [gluewc](https://github.com/vladbiber/gluewc), itself a fork of
+[dwl 0.8](https://codeberg.org/dwl/dwl), built on
+[wlroots 0.20](https://gitlab.freedesktop.org/wlroots/wlroots) and a patched
+copy of [SceneFX 0.5](https://github.com/wlrfx/scenefx) (in `scenefx/`) that
+adds the Liquid Glass rim.
 
-![The overview opening, then the scroll and drift layouts](docs/media/glue-tour.webp)
+![The Glue Mac desktop: MacShell's menu bar, the Applications panel and the Dock](docs/media/gluemac-desktop.png)
 
-*The overview, then a cycle through the scroll and drift layouts.*
-
-![BSP tiling with three windows and the bar](docs/media/bsp-tiling.png)
-
-*Automatic BSP tiling. The bar is [glueqs](https://github.com/vladbiber/glueqs).*
-
-![The overview, with the neighbouring workspaces either side](docs/media/overview.png)
-
-*The overview: the workspace scaled down with its neighbours either side, and
-the shell's dash along the bottom.*
-
-There is a longer clip in
-[docs/media/glue-demo.mp4](https://github.com/vladbiber/gluemac/raw/main/docs/media/glue-demo.mp4);
-GitHub hands mp4 files over as downloads instead of playing them in the page.
+*Glue Mac: MacShell's menu bar, Applications and Dock on gluemac.*
 
 ## Highlights
 
-- Automatic BSP tiling with per-split direction and ratio control
-- Nine independent workspaces on every monitor
-- Animated window open, close, retile and workspace transitions, with
-  configurable type, duration and cubic-bezier easing
-- GNOME-style overview with neighboring workspaces, live windows (a video
-  keeps playing, a terminal keeps scrolling) and the wallpaper underneath; the
-  session can open straight onto it, and every keybinding keeps working while
-  it is up
-- Every window and overview card is cut at the edge of its own monitor, so a
-  strip that hangs off screen or a workspace sliding in never shows up on the
-  monitor next door
-- Niri-style scrolling layout per monitor (Mod-N): columns on an endless strip,
-  vertical workspace slides and a vertical overview over the wallpaper
-- driftwm-style drift layout (Mod-N again): windows keep their native size on
-  an infinite canvas with edge snapping, per-workspace camera pan and zoom,
-  and trackpad gestures for both
-- Drag windows between workspaces directly from the overview
-- Three-finger workspace and overview gestures
-- Directional keyboard focus; crossing the left or right edge changes workspace
-- Insert and normal keyboard modes inspired by modal window managers
-- Runtime config and keybind reload without recompiling, applied as soon as the
-  file is saved and reported on screen when a line does not parse
-- Monitors set up from the same file and applied live: mode, position, scale,
-  rotation, on/off, and mirroring one screen onto another or onto all of them
-- Rounded corners, blur and optional transparency through SceneFX
-- XWayland, layer-shell, session lock and output power-management support
-- dwl IPC and foreign-toplevel support for bars and desktop shells
-- Black fallback background when no wallpaper program is running
+- Stacking windows with a title bar drawn by the compositor: traffic lights,
+  title, double-click to zoom, resizing from every edge, a soft drop shadow
+- Spaces per monitor, with Mission Control showing them as live thumbnails;
+  three-finger swipes follow the fingers between Spaces, pinch for Launchpad
+- Full screen apps get a Space of their own; at the top edge the menu bar and
+  the title bar come down over them on a black strip
+- Genie minimise, Cmd+Tab, Cmd+Opt+Esc for Force Quit
+- Frosted shell panels with a Liquid Glass rim, matched by layer-shell
+  namespace; their soft shadows are left clear (`blur_ignore_alpha`)
+- Hyprland's IPC and the toplevel export/mapping protocols, so MacShell and
+  other Hyprland shells run on it unchanged
+- Everything from gluewc underneath: BSP, scrolling and drift layouts, the
+  overview, runtime config reloaded on save, live monitor setup, XWayland,
+  layer-shell, session lock, dwl IPC and foreign-toplevel
 
 ## Install
 
@@ -319,6 +297,19 @@ config. Run `man gluemac` for command-line and environment details.
 
 ## License and credits
 
-gluemac is GPL-3.0-or-later. It is derived from dwl, which grew from the wlroots
-TinyWL example and carries code influenced by dwm and sway. See `LICENSE*` and
-the Git history for the complete notices.
+gluemac is GPL-3.0-or-later. It stands on:
+
+- [gluewc](https://github.com/vladbiber/gluewc), the compositor it was forked from
+- [dwl](https://codeberg.org/dwl/dwl), which grew from the wlroots TinyWL
+  example and carries code influenced by [dwm](https://dwm.suckless.org) and
+  [sway](https://swaywm.org)
+- [wlroots](https://gitlab.freedesktop.org/wlroots/wlroots) and
+  [SceneFX](https://github.com/wlrfx/scenefx) (MIT), vendored and patched in `scenefx/`
+- [niri](https://github.com/YaLTeR/niri) and
+  [driftwm](https://github.com/malbiruk/driftwm), whose layouts the scrolling and
+  drift modes follow
+- [Hyprland](https://hyprland.org), whose IPC it speaks
+- [MacShell](https://github.com/0-ss/MacShell) by Rickky and vSuol (MIT), the
+  shell it is developed with
+
+See `LICENSE*` and the Git history for the complete notices.
