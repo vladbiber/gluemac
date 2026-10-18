@@ -272,14 +272,17 @@ mactbreveal(void)
 	double ry;
 	int want;
 
-	if (!f || !f->isfullscreen || !mac_stacking || !mac_titlebar)
+	if (!f || !f->isfullscreen || !mac_stacking)
 		return;
 	ry = cursor->y - m->m.y;
-	want = f->tbreveal ? ry < mac_menubar_h + mac_titlebar_h + 6 : ry <= 1;
+	want = f->tbreveal
+			? ry < mac_menubar_h + (mac_titlebar ? mac_titlebar_h : 0) + 6 || barbusy(m)
+			: ry <= 1;
 	if (want == f->tbreveal || cursor_mode != CurNormal)
 		return;
 	f->tbreveal = want;
 	mactbupdate(f);
+	barrevealsync(m);
 	ipcnotifyall();
 }
 

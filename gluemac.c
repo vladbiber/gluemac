@@ -308,6 +308,7 @@ struct Monitor {
 	struct wlr_output *wlr_output;
 	struct wlr_scene_output *scene_output;
 	struct wlr_scene_rect *fullscreen_bg; /* See createmon() for info */
+	int barreveal; /* the bars called down over a full screen window */
 	struct wl_listener frame;
 	struct wl_listener destroy;
 	struct wl_listener request_state;
@@ -444,6 +445,9 @@ static void arrange(Monitor *m);
 static void arrangelayer(Monitor *m, struct wl_list *list,
 		struct wlr_box *usable_area, int exclusive);
 static void arrangelayers(Monitor *m);
+static int barbusy(Monitor *m);
+static void barrevealsync(Monitor *m);
+static void fsbgsync(Monitor *m);
 static void attachclient(Monitor *m, unsigned int ws, Client *c);
 static void axisnotify(struct wl_listener *listener, void *data);
 static void bsp_attach(Monitor *m, unsigned int ws, Client *c);
@@ -725,6 +729,9 @@ static struct wl_event_loop *event_loop;
 static struct wlr_backend *backend;
 static struct wlr_scene *scene;
 static struct wlr_scene_tree *layers[NUM_LAYERS];
+/* top of LyrFS: the TOP layer shells ride here while the bars are called
+ * down over a full screen window */
+static struct wlr_scene_tree *fsbar_scene;
 static struct wlr_scene_tree *drag_icon;
 static struct wlr_scene_tree *overview_dim_scene;
 static struct wlr_scene_tree *overview_scene;
@@ -1497,6 +1504,96 @@ layerblur(LayerSurface *l)
 	wlr_scene_blur_set_glass(l->blur, liquid_glass, liquid_glass_band);
 }
 
+/* everything on the TOP layer comes down with the bars except panels that
+ * hang from the bottom edge only, like the Dock */
+static int
+layerrevealed(LayerSurface *l)
+{
+	uint32_t a = l->layer_surface->current.anchor;
+
+	return l->mon && l->mon->barreveal
+			&& l->layer_surface->current.layer == ZWLR_LAYER_SHELL_V1_LAYER_TOP
+			&& (!(a & ZWLR_LAYER_SURFACE_V1_ANCHOR_BOTTOM)
+				|| (a & ZWLR_LAYER_SURFACE_V1_ANCHOR_TOP));
+}
+
+static struct wlr_scene_tree *
+layertree(LayerSurface *l)
+{
+	return layerrevealed(l) ? fsbar_scene
+			: layers[layermap[l->layer_surface->current.layer]];
+}
+
+/* a menu or Spotlight opened from the bar keeps it down */
+static int
+barbusy(Monitor *m)
+{
+	struct wlr_surface *kb = seat->keyboard_state.focused_surface;
+	struct wlr_layer_surface_v1 *ls = kb ? wlr_layer_surface_v1_try_from_wlr_surface(kb) : NULL;
+	LayerSurface *l;
+
+	if (ls && ls->current.layer == ZWLR_LAYER_SHELL_V1_LAYER_TOP)
+		return 1;
+	wl_list_for_each(l, &m->layers[ZWLR_LAYER_SHELL_V1_LAYER_TOP], link)
+		if (l->mapped && !wl_list_empty(&l->popups->children))
+			return 1;
+	return 0;
+}
+
+static void
+barrevealsync(Monitor *m)
+{
+	Client *f = focustop(m);
+	LayerSurface *l;
+	struct wlr_scene_tree *t;
+	int on = f && f->isfullscreen && f->tbreveal && !overview_visible;
+
+	if (m->barreveal == on)
+		return;
+	m->barreveal = on;
+	if (on)
+		wlr_scene_node_raise_to_top(&fsbar_scene->node);
+	wl_list_for_each(l, &m->layers[ZWLR_LAYER_SHELL_V1_LAYER_TOP], link) {
+		if (l->scene->node.parent == (t = layertree(l)))
+			continue;
+		wlr_scene_node_reparent(&l->scene->node, t);
+		wlr_scene_node_reparent(&l->popups->node, t);
+		if (!on || !l->mapped || l->anim.active || !animations
+				|| animation_duration_open <= 0)
+			continue;
+		/* slide down from behind the top edge, like the Mac's menu bar */
+		l->anim.active = 1;
+		l->anim.t = 0.0f;
+		l->anim.to_y = l->scene->node.y;
+		l->anim.from_y = l->anim.to_y
+				- (int)l->layer_surface->surface->current.height;
+		wlr_scene_node_set_position(&l->scene->node, l->scene->node.x, l->anim.from_y);
+		wlr_scene_node_set_position(&l->popups->node, l->scene->node.x, l->anim.from_y);
+		layeropacity(l, 0.0f);
+		animkick(m);
+	}
+}
+
+/* the black behind a full screen client travels with it when its space
+ * slides, so the desktop coming in is not covered */
+static void
+fsbgsync(Monitor *m)
+{
+	Client *c;
+
+	wl_list_for_each(c, &clients, link) {
+		if (c->mon != m || !c->isfullscreen || !c->scene->node.enabled
+				|| client_is_unmanaged(c))
+			continue;
+		wlr_scene_node_set_enabled(&m->fullscreen_bg->node, 1);
+		wlr_scene_node_set_position(&m->fullscreen_bg->node,
+				m->m.x + c->scene->node.x - c->geom.x,
+				m->m.y + c->scene->node.y - c->geom.y);
+		return;
+	}
+	wlr_scene_node_set_enabled(&m->fullscreen_bg->node, 0);
+}
+
 static void
 layeranimstart(LayerSurface *l)
 {
@@ -1626,6 +1723,7 @@ arrange(Monitor *m)
 	}
 
 	wlr_scene_node_set_enabled(&m->fullscreen_bg->node, fs && fs->isfullscreen);
+	wlr_scene_node_set_position(&m->fullscreen_bg->node, m->m.x, m->m.y);
 
 	if (fs && fs->isfakefull && SCROLLLT(m) && !fs->isfloating) {
 		scroll_tile(m);
@@ -1642,6 +1740,7 @@ arrange(Monitor *m)
 	}
 	motionnotify(0, NULL, 0, 0, 0, 0);
 	checkidleinhibitor(NULL);
+	barrevealsync(m);
 	ipcnotifyall();
 	if (overview_visible)
 		overview_dirty = 1;
@@ -4164,7 +4263,7 @@ commitlayersurfacenotify(struct wl_listener *listener, void *data)
 {
 	LayerSurface *l = wl_container_of(listener, l, surface_commit);
 	struct wlr_layer_surface_v1 *layer_surface = l->layer_surface;
-	struct wlr_scene_tree *scene_layer = layers[layermap[layer_surface->current.layer]];
+	struct wlr_scene_tree *scene_layer = layertree(l);
 	struct wlr_layer_surface_v1_state old_state;
 	int wasmapped;
 
@@ -4291,7 +4390,7 @@ precommitlayersurfacenotify(struct wl_listener *listener, void *data)
 			&& (surface->pending.committed & WLR_SURFACE_STATE_BUFFER)
 			&& !surface->pending.buffer)
 		l->anim.closing = closeanimstart(&l->scene->node,
-				layers[layermap[l->layer_surface->current.layer]], l->mon);
+				layertree(l), l->mon);
 }
 
 void
@@ -8222,6 +8321,7 @@ rendermon(struct wl_listener *listener, void *data)
 		}
 	}
 	overviewfinish();
+	fsbgsync(m);
 
 	if (skipframe)
 		goto skip;
@@ -9695,6 +9795,7 @@ setup(void)
 	wl_list_init(&close_anims);
 	for (i = 0; i < NUM_LAYERS; i++)
 		layers[i] = wlr_scene_tree_create(&scene->tree);
+	fsbar_scene = wlr_scene_tree_create(layers[LyrFS]);
 	drag_icon = wlr_scene_tree_create(&scene->tree);
 	wlr_scene_node_place_below(&drag_icon->node, &layers[LyrBlock]->node);
 	overview_dim_scene = wlr_scene_tree_create(layers[LyrBottom]);
@@ -10411,7 +10512,7 @@ unmaplayersurfacenotify(struct wl_listener *listener, void *data)
 
 	if (!l->anim.closing && layeranimated(l))
 		l->anim.closing = closeanimstart(&l->scene->node,
-				layers[layermap[l->layer_surface->current.layer]], l->mon);
+				layertree(l), l->mon);
 	l->anim.active = 0;
 	l->anim.closing = 0;
 	layeropacity(l, 1.0f);
