@@ -738,6 +738,8 @@ static char blur_layers[512] = "macdock macspot macbarbg";
 static char own_frame_apps[512] = "org.quickshell* quickshell dev.noctalia.noctalia-qs";
 static float blur_brightness = 0.9f, blur_contrast = 0.9f, blur_saturation = 1.1f;
 static float liquid_glass = 0.6f, liquid_glass_band = 18.0f;
+/* panel pixels at or below this alpha (soft shadows) stay unfrosted */
+static float blur_ignore_alpha = 0.2f;
 static struct wl_list close_anims;
 static int overview_active;
 static int overview_visible;
@@ -1471,7 +1473,7 @@ layerblurmask(struct wlr_scene_buffer *buffer, int sx, int sy, void *data)
 }
 
 /* The blur follows the panel's main buffer as its mask, so only the parts
- * the shell actually paints are frosted (Hyprland's ignore_alpha 0). */
+ * the shell actually paints are frosted (Hyprland's ignore_alpha). */
 static void
 layerblur(LayerSurface *l)
 {
@@ -1491,6 +1493,7 @@ layerblur(LayerSurface *l)
 	wlr_scene_node_for_each_buffer(&l->scene->node, layerblurmask, l);
 	wlr_scene_node_set_enabled(&l->blur->node, l->blurmask && surface->mapped);
 	wlr_scene_blur_set_size(l->blur, surface->current.width, surface->current.height);
+	wlr_scene_blur_set_ignore_alpha_threshold(l->blur, blur_ignore_alpha);
 	wlr_scene_blur_set_glass(l->blur, liquid_glass, liquid_glass_band);
 }
 
@@ -9590,6 +9593,8 @@ readconfig(void)
 			blur_contrast = strtof(v, NULL);
 		} else if (!strcmp(k, "blur_saturation")) {
 			blur_saturation = strtof(v, NULL);
+		} else if (!strcmp(k, "blur_ignore_alpha")) {
+			blur_ignore_alpha = strtof(v, NULL);
 		} else if (!strcmp(k, "liquid_glass")) {
 			liquid_glass = strtof(v, NULL);
 		} else if (!strcmp(k, "liquid_glass_band")) {

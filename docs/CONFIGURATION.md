@@ -46,6 +46,7 @@ The same report appears at login when the config was already broken.
 | `blur_passes` | integer | SceneFX blur passes |
 | `blur_radius` | integer | SceneFX blur radius |
 | `blur_layers` | list | layer-shell namespaces blurred behind (a trailing `*` matches a prefix) |
+| `blur_ignore_alpha` | float | panel pixels at or below this alpha stay unfrosted, like Hyprland's `ignore_alpha` (default 0.2) |
 | `own_frame_apps` | list | app ids that draw their own frame, so they get no Mac title bar (a trailing `*` matches a prefix) |
 | `opacity` | 0.1–1.0 | opacity used while transparency is enabled |
 | `animations` | boolean | enable window, workspace and overview animation |
