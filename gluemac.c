@@ -309,6 +309,7 @@ struct Monitor {
 	struct wlr_scene_output *scene_output;
 	struct wlr_scene_rect *fullscreen_bg; /* See createmon() for info */
 	int barreveal; /* the bars called down over a full screen window */
+	struct wlr_scene_rect *fsbar_bg; /* solid black under them meanwhile */
 	struct wl_listener frame;
 	struct wl_listener destroy;
 	struct wl_listener request_state;
@@ -1551,6 +1552,7 @@ barrevealsync(Monitor *m)
 	if (m->barreveal == on)
 		return;
 	m->barreveal = on;
+	wlr_scene_node_set_enabled(&m->fsbar_bg->node, on);
 	if (on)
 		wlr_scene_node_raise_to_top(&fsbar_scene->node);
 	wl_list_for_each(l, &m->layers[ZWLR_LAYER_SHELL_V1_LAYER_TOP], link) {
@@ -1580,6 +1582,19 @@ static void
 fsbgsync(Monitor *m)
 {
 	Client *c;
+	LayerSurface *l;
+	int dy = 0;
+
+	/* the black under the called-down bars slides with them */
+	if (m->barreveal) {
+		wl_list_for_each(l, &m->layers[ZWLR_LAYER_SHELL_V1_LAYER_TOP], link)
+			if (l->anim.active && layerrevealed(l)) {
+				dy = l->scene->node.y - l->anim.to_y;
+				break;
+			}
+		wlr_scene_rect_set_size(m->fsbar_bg, m->m.width, mac_menubar_h);
+		wlr_scene_node_set_position(&m->fsbar_bg->node, m->m.x, m->m.y + dy);
+	}
 
 	wl_list_for_each(c, &clients, link) {
 		if (c->mon != m || !c->isfullscreen || !c->scene->node.enabled
@@ -4184,6 +4199,7 @@ cleanupmon(struct wl_listener *listener, void *data)
 	closeanimclear(m);
 	genieclear(m, NULL);
 	wlr_scene_node_destroy(&m->fullscreen_bg->node);
+	wlr_scene_node_destroy(&m->fsbar_bg->node);
 	free(m);
 	saveoutputstate();
 }
@@ -5119,6 +5135,9 @@ createmon(struct wl_listener *listener, void *data)
 	/* updatemons() will resize and set correct position */
 	m->fullscreen_bg = wlr_scene_rect_create(layers[LyrFS], 0, 0, fullscreen_bg);
 	wlr_scene_node_set_enabled(&m->fullscreen_bg->node, 0);
+	m->fsbar_bg = wlr_scene_rect_create(fsbar_scene, 0, 0, fullscreen_bg);
+	wlr_scene_node_lower_to_bottom(&m->fsbar_bg->node);
+	wlr_scene_node_set_enabled(&m->fsbar_bg->node, 0);
 
 	/* Adds this to the output layout in the order it was configured.
 	 *
