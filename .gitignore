@@ -16,3 +16,4 @@ tests/wlpower.c
 tests/wlr-output-power-management-unstable-v1.xml
 gluemac-msg
 build-scenefx/
+gluemac-hyprctl

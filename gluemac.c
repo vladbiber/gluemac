@@ -435,6 +435,7 @@ typedef struct {
 static float animease(const float *curve, float t);
 static void animkick(Monitor *m);
 static void animstop(Monitor *m);
+static int namelisted(const char *list, const char *ns);
 static void applybounds(Client *c, struct wlr_box *bbox);
 static void applyeffects(Client *c);
 static void applyfakefull(Client *c);
@@ -732,7 +733,9 @@ static struct wlr_scene_tree *overview_drag_scene;
 static struct wl_list overview_cards;
 /* layer-shell namespaces blurred behind, like Hyprland's "layerrule = blur";
  * a trailing * matches a prefix */
-static char blur_layers[512] = "eqsh:blur eqsh:ddm-blur eqsh:lock-blur eqsh:spotlight";
+static char blur_layers[512] = "macdock macspot macbarbg";
+/* app ids that draw their own frame and traffic lights */
+static char own_frame_apps[512] = "org.quickshell* quickshell dev.noctalia.noctalia-qs";
 static float blur_brightness = 0.9f, blur_contrast = 0.9f, blur_saturation = 1.1f;
 static float liquid_glass = 0.6f, liquid_glass_band = 18.0f;
 static struct wl_list close_anims;
@@ -883,6 +886,8 @@ static struct wlr_xwayland *xwayland;
 #include "client.h"
 
 #include "mac.c"
+#include "machypr.c"
+#include "macexport.c"
 
 /* function implementations */
 static int
@@ -1422,10 +1427,11 @@ layeropacity(LayerSurface *l, float opacity)
 		wlr_scene_blur_set_alpha(l->blur, opacity);
 }
 
+/* is name in a space separated list; a trailing * matches a prefix */
 static int
-layerwantsblur(LayerSurface *l)
+namelisted(const char *list, const char *ns)
 {
-	const char *ns = l->layer_surface->namespace, *p = blur_layers, *e;
+	const char *p = list, *e;
 	size_t n;
 
 	if (!ns || !*ns)
@@ -1440,6 +1446,12 @@ layerwantsblur(LayerSurface *l)
 		p = e;
 	}
 	return 0;
+}
+
+static int
+layerwantsblur(LayerSurface *l)
+{
+	return namelisted(blur_layers, l->layer_surface->namespace);
 }
 
 static void
@@ -3995,6 +4007,7 @@ checkidleinhibitor(struct wlr_surface *exclude)
 void
 cleanup(void)
 {
+	hyprcleanup();
 	cleanuplisteners();
 #ifdef XWAYLAND
 	wlr_xwayland_destroy(xwayland);
@@ -5287,6 +5300,7 @@ destroynotify(struct wl_listener *listener, void *data)
 {
 	/* Called when the xdg_toplevel is destroyed. */
 	Client *c = wl_container_of(listener, c, destroy);
+	exportforget(c);
 	wl_list_remove(&c->destroy.link);
 	wl_list_remove(&c->set_title.link);
 	wl_list_remove(&c->fullscreen.link);
@@ -5971,6 +5985,7 @@ statesync(void *data)
 	statesync_idle = NULL;
 	saveworkspacestate();
 	macsavestate();
+	hyprsync();
 }
 
 void
@@ -8343,6 +8358,7 @@ run(char *startup_cmd)
 		die("startup: display_add_socket_auto");
 	setenv("WAYLAND_DISPLAY", socket, 1);
 	wlr_log(WLR_INFO, "Running compositor on wayland display '%s'", socket);
+	hyprsetup(socket);
 
 	/* Start the backend. This will enumerate outputs and inputs, become the DRM
 	 * master, etc */
@@ -9566,6 +9582,8 @@ readconfig(void)
 			blur_radius = atoi(v);
 		} else if (!strcmp(k, "blur_layers")) {
 			snprintf(blur_layers, sizeof blur_layers, "%s", v);
+		} else if (!strcmp(k, "own_frame_apps")) {
+			snprintf(own_frame_apps, sizeof own_frame_apps, "%s", v);
 		} else if (!strcmp(k, "blur_brightness")) {
 			blur_brightness = strtof(v, NULL);
 		} else if (!strcmp(k, "blur_contrast")) {
@@ -9866,6 +9884,7 @@ setup(void)
 	wl_list_init(&overview_cards);
 	wl_global_create(dpy, &zdwl_ipc_manager_v2_interface, 2, NULL, ipcmgrbind);
 	ftl_mgr = wlr_foreign_toplevel_manager_v1_create(dpy);
+	exportsetup();
 
 	/* Make sure XWayland clients don't connect to the parent X server,
 	 * e.g when running in the x11 backend or the wayland backend and the
@@ -10407,6 +10426,7 @@ unmapnotify(struct wl_listener *listener, void *data)
 {
 	/* Called when the surface is unmapped, and should no longer be shown. */
 	Client *c = wl_container_of(listener, c, unmap);
+	exportforget(c);
 	macunmap(c);
 	clientcloseanim(c);
 	c->anim.closing = 0;

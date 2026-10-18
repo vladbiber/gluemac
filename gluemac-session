@@ -24,6 +24,34 @@ if [ ! -e "$CFGDIR/config.conf" ]; then
 	done
 fi
 
+# gluemac-shell gave way to MacShell: a config written for it is moved over
+# once, the old one kept next to it
+if grep -q 'qs -c gluemac-shell' "$CFGDIR/config.conf" 2>/dev/null \
+		&& command -v glue-macshell >/dev/null 2>&1 \
+		&& [ ! -d /etc/xdg/quickshell/gluemac-shell ]; then
+	cp "$CFGDIR/config.conf" "$CFGDIR/config.conf.gluemac-shell"
+	sed -i \
+		-e 's|^autostart = qs -c gluemac-shell$|autostart = glue-macshell|' \
+		-e 's|qs -c gluemac-shell ipc call spotlight toggle.*$|glue-macshell ipc spotlight toggle|' \
+		-e 's|qs -c gluemac-shell ipc call launchpad toggle.*$|glue-macshell ipc spotlight apps|' \
+		-e 's|qs -c gluemac-shell ipc call screenshot open.*$|glue-macshell ipc screenshot region|' \
+		-e 's|qs -c gluemac-shell ipc call notificationCenter toggle.*$|glue-macshell ipc notifications open|' \
+		-e 's|spawn:qs -c gluemac-shell ipc call forceQuit open.*$|spawn:gluemac-hyprctl dispatch forcekillactive|' \
+		-e 's|qs -c gluemac-shell ipc call lock lock.*$|glue-macshell lock|' \
+		-e 's|^\(blur_layers *=\).*eqsh:.*$|\1 macdock macspot macbarbg|' \
+		-e 's|^\(.*\)qs -c gluemac-shell ipc call \(.*\)$|# gluemac-shell is gone: \1qs -c gluemac-shell ipc call \2|' \
+		"$CFGDIR/config.conf"
+	# MacShell's own shortcuts, on keys the config leaves free
+	while IFS='|' read -r key run; do
+		grep -q "^bind_insert = $key = " "$CFGDIR/config.conf" \
+			|| echo "bind_insert = $key = spawn:$run" >> "$CFGDIR/config.conf"
+	done <<-EOF
+	ctrl+cmd+space|glue-macshell ipc spotlight emoji
+	cmd+shift+v|glue-macshell ipc spotlight clipboard
+	ctrl+opt+w|glue-macshell ipc wallpapers toggle
+	EOF
+fi
+
 RUNDIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 # D-Bus.  On a systemd (or dbus-broker) system the user bus is already up at

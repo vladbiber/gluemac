@@ -15,7 +15,8 @@ static int
 mactbwanted(Client *c)
 {
 	return mac_stacking && mac_titlebar && !decorhidden && c->scene
-			&& !client_is_unmanaged(c) && !c->isfullscreen && !c->isfakefull;
+			&& !client_is_unmanaged(c) && !c->isfullscreen && !c->isfakefull
+			&& !namelisted(own_frame_apps, client_get_appid(c));
 }
 
 /* where the bar is inside the window's tree: under the border normally, and
