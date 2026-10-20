@@ -7810,7 +7810,7 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 		double dx_unaccel, double dy_unaccel)
 {
 	double sx = 0, sy = 0, sx_confined, sy_confined;
-	Client *c = NULL, *w = NULL;
+	Client *c = NULL, *w = NULL, *cc = NULL;
 	LayerSurface *l = NULL;
 	struct wlr_surface *surface = NULL;
 	struct wlr_pointer_constraint_v1 *constraint;
@@ -7841,10 +7841,11 @@ motionnotify(uint32_t time, struct wlr_input_device *device, double dx, double d
 				&& cursor_mode != CurBSPMove && cursor_mode != CurBSPResize
 				&& cursor_mode != CurDriftMove && cursor_mode != CurDriftResize
 				&& cursor_mode != CurDriftPan && cursor_mode != CurMacResize) {
-			toplevel_from_wlr_surface(active_constraint->surface, &c, NULL);
-			if (c && active_constraint->surface == seat->pointer_state.focused_surface) {
-				sx = cursor->x - c->geom.x - c->bw;
-				sy = cursor->y - c->geom.y - c->bw - c->tb;
+			/* its own variable: c still has to be the client under the pointer */
+			toplevel_from_wlr_surface(active_constraint->surface, &cc, NULL);
+			if (cc && active_constraint->surface == seat->pointer_state.focused_surface) {
+				sx = cursor->x - cc->geom.x - cc->bw;
+				sy = cursor->y - cc->geom.y - cc->bw - cc->tb;
 				if (wlr_region_confine(&active_constraint->region, sx, sy,
 						sx + dx, sy + dy, &sx_confined, &sy_confined)) {
 					dx = sx_confined - sx;
