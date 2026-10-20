@@ -2,6 +2,7 @@
  * See LICENSE file for copyright and license details.
  */
 #include <errno.h>
+#include <fnmatch.h>
 #include <getopt.h>
 #include <sys/inotify.h>
 #include <limits.h>
@@ -763,6 +764,8 @@ static int cfg_nerrors;
 static int cfg_errline, cfg_curline;
 static char cfg_errmsg[192];
 static char cfg_path[512];
+/* app_id/class globs that open fullscreen; fullscreen_apps in the config */
+static char fullscreen_apps[512] = "steam_app_* cs2 org.vinegarhq.Sober";
 static int overview_button_swallow;
 static double overview_swipe_dx, overview_swipe_dy;
 static int overview_swipe_active, overview_swipe_triggered;
@@ -1679,6 +1682,33 @@ applybounds(Client *c, struct wlr_box *bbox)
 		c->geom.x = bbox->x;
 	if (c->geom.y + c->geom.height <= bbox->y)
 		c->geom.y = bbox->y;
+}
+
+/* games open fullscreen; their dialogs, splashes and child windows do not */
+static int
+fullscreenapp(Client *c)
+{
+	char buf[sizeof fullscreen_apps], *t, *save = NULL;
+	const char *id = client_get_appid(c);
+
+	if (!id || !*id || client_is_unmanaged(c) || client_get_parent(c))
+		return 0;
+#ifdef XWAYLAND
+	if (client_is_x11(c)) {
+		struct wlr_xwayland_surface *s = c->surface.xwayland;
+		if (s->modal
+				|| wlr_xwayland_surface_has_window_type(s, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_DIALOG)
+				|| wlr_xwayland_surface_has_window_type(s, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_SPLASH)
+				|| wlr_xwayland_surface_has_window_type(s, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_TOOLBAR)
+				|| wlr_xwayland_surface_has_window_type(s, WLR_XWAYLAND_NET_WM_WINDOW_TYPE_UTILITY))
+			return 0;
+	}
+#endif
+	snprintf(buf, sizeof buf, "%s", fullscreen_apps);
+	for (t = strtok_r(buf, " ,", &save); t; t = strtok_r(NULL, " ,", &save))
+		if (!fnmatch(t, id, 0))
+			return 1;
+	return 0;
 }
 
 void
@@ -7693,6 +7723,7 @@ mapnotify(struct wl_listener *listener, void *data)
 		c->isfloating = 1;
 		setmon(c, p->mon, p->ws);
 	} else {
+		c->isfullscreen |= fullscreenapp(c);
 		applyrules(c);
 	}
 
@@ -9705,6 +9736,8 @@ readconfig(void)
 			blur_radius = atoi(v);
 		} else if (!strcmp(k, "blur_layers")) {
 			snprintf(blur_layers, sizeof blur_layers, "%s", v);
+		} else if (!strcmp(k, "fullscreen_apps")) {
+			snprintf(fullscreen_apps, sizeof fullscreen_apps, "%s", v);
 		} else if (!strcmp(k, "own_frame_apps")) {
 			snprintf(own_frame_apps, sizeof own_frame_apps, "%s", v);
 		} else if (!strcmp(k, "blur_brightness")) {
